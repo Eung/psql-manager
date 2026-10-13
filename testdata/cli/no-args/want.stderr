@@ -1,0 +1,14 @@
+Usage: psql-manager <command> [arguments]
+
+Commands:
+  add      add a service to both files
+  list     list services
+  show     show one service in detail
+  edit     change a service; .pgpass follows host/port/dbname/user
+  rm       remove a service and its managed .pgpass entry
+  search   search name, desc, tags, host and dbname
+  path     print the files and psql in use
+
+Run 'psql-manager help <command>' for details.
+psql-manager: no command given
+Run 'psql-manager help' for usage.

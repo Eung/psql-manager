@@ -1,0 +1,11 @@
+add
+first
+--host
+h.example.com
+--port
+5432
+--db
+d
+--user
+u
+--password-stdin

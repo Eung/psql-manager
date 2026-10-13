@@ -1,0 +1,17 @@
+add
+new-svc
+--host
+new.example.com
+--port
+5433
+--db
+newdb
+--user
+app
+--desc
+새 서비스
+--tags
+dev,test
+--option
+sslmode=require
+--password-stdin

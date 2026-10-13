@@ -436,6 +436,19 @@ func TestUpdateRejections(t *testing.T) {
 	}
 }
 
+func TestInvalidInputIsWrapped(t *testing.T) {
+	e := newEnv(t, baseSvc, basePgpass)
+	if err := e.st.Update("prod-ro", Update{Desc: ptr("a\nb")}); !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("Update: err = %v, want ErrInvalidInput", err)
+	}
+	if err := e.st.Add(newService(), "a\nb"); !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("Add: err = %v, want ErrInvalidInput", err)
+	}
+	if !ValidName("ok-name") || ValidName("bad name") {
+		t.Error("ValidName is wrong")
+	}
+}
+
 func TestUpdateInvalidValues(t *testing.T) {
 	for name, u := range map[string]Update{
 		"desc newline": {Desc: ptr("a\nb")},

@@ -1,0 +1,2 @@
+psql-manager: rm asks for confirmation; pass -y when not on a terminal
+Run 'psql-manager help' for usage.

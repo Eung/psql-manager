@@ -1,0 +1,1 @@
+psql-manager: store: an earlier .pgpass line takes precedence over this password (line 2)

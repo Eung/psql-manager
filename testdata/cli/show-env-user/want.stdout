@@ -1,0 +1,8 @@
+name      stg-settle
+desc      -
+tags      -
+host      stg.example.com  (service file)
+port      6543             (env: PGPORT)
+dbname    settledb         (service file)
+user      app              (service file)
+password  ********         (unmanaged, $TMP/pgpass line 7)

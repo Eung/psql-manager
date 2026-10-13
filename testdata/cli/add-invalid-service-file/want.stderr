@@ -1,0 +1,1 @@
+psql-manager: store: service file has lines libpq cannot parse; fix them before editing: $TMP/pg_service.conf: svcfile: line 2: expected key=value

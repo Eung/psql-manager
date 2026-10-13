@@ -1,0 +1,3 @@
+NAME            HOST            DBNAME    USER      PASSWORD   TAGS                      DESC
+prod-settle-ro  db.example.com  settledb  readonly  managed    prod,readonly,settlement  운영 DB 읽기 전용 (정산)
+prod-settle-rw  db.example.com  settledb  writer    unmanaged  -                         운영 DB 쓰기

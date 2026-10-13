@@ -1,0 +1,8 @@
+name      dev-local
+desc      -
+tags      dev
+host      -         (default: unix socket)
+port      5432      (default)
+dbname    devdb     (service file)
+user      me        (service file)
+password  ********  (unmanaged, $TMP/pgpass line 2)

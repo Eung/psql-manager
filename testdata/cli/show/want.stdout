@@ -1,0 +1,10 @@
+name      prod-settle-ro
+desc      운영 DB 읽기 전용 (정산)
+tags      prod, readonly, settlement
+host      db.example.com          (service file)
+port      5432                    (service file)
+dbname    settledb                (service file)
+user      readonly                (service file)
+sslmode   require                 (service file)
+options   -c timezone=Asia/Seoul  (service file)
+password  ********                (managed, $TMP/pgpass line 4)

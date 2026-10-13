@@ -1,0 +1,9 @@
+add
+x
+--port
+1
+--db
+d
+--user
+u
+--password-stdin

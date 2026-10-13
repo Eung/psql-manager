@@ -1,0 +1,2 @@
+psql-manager: --reveal-password cannot be used with --json
+Run 'psql-manager help' for usage.

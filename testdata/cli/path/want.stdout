@@ -1,0 +1,3 @@
+service file: $TMP/pg_service.conf (PGSERVICEFILE)
+pgpass:       $TMP/pgpass (PGPASSFILE)
+psql:         $TMP/bin/psql (PSQL_MANAGER_PSQL)

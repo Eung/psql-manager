@@ -24,7 +24,18 @@ var (
 		"provide a password to replace it or remove it with doctor --fix")
 	ErrInvalidServiceFile = errors.New("store: service file has lines libpq cannot parse; fix them before editing")
 	ErrInvalidPgpass      = errors.New("store: .pgpass has malformed lines; fix them before editing")
+	ErrInvalidInput       = errors.New("store: invalid input")
 )
+
+// inputErrors는 사용자가 준 값이 잘못되었다는 하위 패키지 오류다. mutate는 이 오류를
+// ErrInvalidInput으로 감싸, 호출하는 쪽이 하위 패키지를 몰라도 구분할 수 있게 한다.
+var inputErrors = []error{
+	svcfile.ErrInvalidName, svcfile.ErrInvalidKey, svcfile.ErrInvalidValue, svcfile.ErrPasswordKey,
+	pgpass.ErrInvalidName, pgpass.ErrInvalidValue, pgpass.ErrEmptyPassword,
+}
+
+// ValidName은 name이 허용되는 서비스명([A-Za-z0-9._-]+)인지 알려 준다.
+func ValidName(name string) bool { return svcfile.ValidName(name) }
 
 // Param은 서비스 파일의 key=value 한 줄이다.
 type Param = svcfile.Param
@@ -210,6 +221,11 @@ func (s *Store) mutate(fn func(*snapshot) error) error {
 		return err
 	}
 	if err := fn(sn); err != nil {
+		for _, ie := range inputErrors {
+			if errors.Is(err, ie) {
+				return fmt.Errorf("%w: %w", ErrInvalidInput, err)
+			}
+		}
 		return err
 	}
 	return s.write(sn)

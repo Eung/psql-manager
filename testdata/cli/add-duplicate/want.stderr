@@ -1,0 +1,2 @@
+psql-manager: service "prod-settle-ro" already exists; use 'psql-manager edit' to change it
+Run 'psql-manager help' for usage.

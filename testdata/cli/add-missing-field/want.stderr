@@ -1,0 +1,2 @@
+psql-manager: store: port, dbname and user are required to store a password
+Run 'psql-manager help' for usage.

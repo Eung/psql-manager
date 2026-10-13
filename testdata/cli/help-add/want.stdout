@@ -1,0 +1,16 @@
+Usage: psql-manager add <name> [options]
+
+add a service to both files
+
+Options:
+  --host <host>      host name or socket directory
+  --port <port>      port
+  --db <dbname>      database name
+  --user <user>      user name
+  --desc <text>      one-line description
+  --tags <a,b>       comma-separated tags
+  --option <k=v>     other libpq parameter, repeatable
+  --password-stdin   read the password from the first line of stdin
+
+On a terminal, the password is always prompted (empty for none). When no
+connection option is given, the other values are prompted too.

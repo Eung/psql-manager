@@ -1,0 +1,9 @@
+add
+dev2
+--port
+5432
+--db
+devdb
+--user
+me
+--password-stdin

@@ -1,0 +1,208 @@
+[
+  {
+    "name": "prod-settle-ro",
+    "desc": "운영 DB 읽기 전용 (정산)",
+    "tags": [
+      "prod",
+      "readonly",
+      "settlement"
+    ],
+    "line": 9,
+    "params": [
+      {
+        "key": "host",
+        "value": "db.example.com"
+      },
+      {
+        "key": "port",
+        "value": "5432"
+      },
+      {
+        "key": "dbname",
+        "value": "settledb"
+      },
+      {
+        "key": "user",
+        "value": "readonly"
+      },
+      {
+        "key": "sslmode",
+        "value": "require"
+      },
+      {
+        "key": "options",
+        "value": "-c timezone=Asia/Seoul"
+      }
+    ],
+    "effective": {
+      "host": {
+        "value": "db.example.com",
+        "source": "service",
+        "detail": ""
+      },
+      "port": {
+        "value": "5432",
+        "source": "service",
+        "detail": ""
+      },
+      "dbname": {
+        "value": "settledb",
+        "source": "service",
+        "detail": ""
+      },
+      "user": {
+        "value": "readonly",
+        "source": "service",
+        "detail": ""
+      }
+    },
+    "password": {
+      "state": "managed",
+      "line": 4,
+      "owner": ""
+    }
+  },
+  {
+    "name": "prod-settle-rw",
+    "desc": "운영 DB 쓰기",
+    "tags": [],
+    "line": 20,
+    "params": [
+      {
+        "key": "host",
+        "value": "db.example.com"
+      },
+      {
+        "key": "port",
+        "value": "5432"
+      },
+      {
+        "key": "dbname",
+        "value": "settledb"
+      },
+      {
+        "key": "user",
+        "value": "writer"
+      }
+    ],
+    "effective": {
+      "host": {
+        "value": "db.example.com",
+        "source": "service",
+        "detail": ""
+      },
+      "port": {
+        "value": "5432",
+        "source": "service",
+        "detail": ""
+      },
+      "dbname": {
+        "value": "settledb",
+        "source": "service",
+        "detail": ""
+      },
+      "user": {
+        "value": "writer",
+        "source": "service",
+        "detail": ""
+      }
+    },
+    "password": {
+      "state": "unmanaged",
+      "line": 7,
+      "owner": ""
+    }
+  },
+  {
+    "name": "stg-settle",
+    "desc": "",
+    "tags": [],
+    "line": 27,
+    "params": [
+      {
+        "key": "host",
+        "value": "stg.example.com"
+      },
+      {
+        "key": "dbname",
+        "value": "settledb"
+      },
+      {
+        "key": "user",
+        "value": "app"
+      }
+    ],
+    "effective": {
+      "host": {
+        "value": "stg.example.com",
+        "source": "service",
+        "detail": ""
+      },
+      "port": {
+        "value": "5432",
+        "source": "default",
+        "detail": ""
+      },
+      "dbname": {
+        "value": "settledb",
+        "source": "service",
+        "detail": ""
+      },
+      "user": {
+        "value": "app",
+        "source": "service",
+        "detail": ""
+      }
+    },
+    "password": {
+      "state": "unmanaged",
+      "line": 7,
+      "owner": ""
+    }
+  },
+  {
+    "name": "dev-local",
+    "desc": "",
+    "tags": [
+      "dev"
+    ],
+    "line": 34,
+    "params": [
+      {
+        "key": "dbname",
+        "value": "devdb"
+      },
+      {
+        "key": "user",
+        "value": "me"
+      }
+    ],
+    "effective": {
+      "host": {
+        "value": "",
+        "source": "default",
+        "detail": "unix socket"
+      },
+      "port": {
+        "value": "5432",
+        "source": "default",
+        "detail": ""
+      },
+      "dbname": {
+        "value": "devdb",
+        "source": "service",
+        "detail": ""
+      },
+      "user": {
+        "value": "me",
+        "source": "service",
+        "detail": ""
+      }
+    },
+    "password": {
+      "state": "unmanaged",
+      "line": 2,
+      "owner": ""
+    }
+  }
+]

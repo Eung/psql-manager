@@ -1,0 +1,10 @@
+edit
+stg-settle
+--host
+
+--desc
+스테이징
+--tags
+stg,qa
+--option
+sslmode=disable

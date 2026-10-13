@@ -1,0 +1,2 @@
+psql-manager: --password-stdin expects a single line
+Run 'psql-manager help' for usage.

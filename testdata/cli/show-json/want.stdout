@@ -1,0 +1,45 @@
+{
+  "name": "dev-local",
+  "desc": "",
+  "tags": [
+    "dev"
+  ],
+  "line": 34,
+  "params": [
+    {
+      "key": "dbname",
+      "value": "devdb"
+    },
+    {
+      "key": "user",
+      "value": "me"
+    }
+  ],
+  "effective": {
+    "host": {
+      "value": "",
+      "source": "default",
+      "detail": "unix socket"
+    },
+    "port": {
+      "value": "5432",
+      "source": "default",
+      "detail": ""
+    },
+    "dbname": {
+      "value": "devdb",
+      "source": "service",
+      "detail": ""
+    },
+    "user": {
+      "value": "me",
+      "source": "service",
+      "detail": ""
+    }
+  },
+  "password": {
+    "state": "unmanaged",
+    "line": 2,
+    "owner": ""
+  }
+}

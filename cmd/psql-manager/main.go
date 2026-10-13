@@ -2,19 +2,14 @@
 package main
 
 import (
-	"fmt"
 	"os"
+
+	"github.com/Eung/psql-manager/internal/cli"
 )
 
 // version은 빌드할 때 -ldflags "-X main.version=..."으로 덮어쓴다.
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "version" || os.Args[1] == "--version") {
-		fmt.Println(version)
-		return
-	}
-	// 서브커맨드는 M3에서 구현한다.
-	fmt.Fprintln(os.Stderr, "psql-manager: not implemented yet")
-	os.Exit(2)
+	os.Exit(cli.New(version).Run(os.Args[1:]))
 }

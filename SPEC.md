@@ -111,7 +111,7 @@ psql-manager/
 
 **기술 스택**
 
-- Go 1.22 이상, 모듈명은 `github.com/Eung/psql-manager` (`저장소: https://github.com/Eung/psql-manager). 바이너리 이름도 psql-manager다.`.
+- Go 1.26 이상, 모듈명은 `github.com/Eung/psql-manager` (`저장소: https://github.com/Eung/psql-manager). 바이너리 이름도 psql-manager다.`.
 - CLI 파싱은 표준 `flag` + 서브커맨드 직접 라우팅을 기본으로 한다. 서브커맨드가 늘면 `spf13/cobra`로 교체할 수 있게 `cli` 패키지 안에 가둔다.
 - TUI는 `charmbracelet/bubbletea`, `bubbles`(list, textinput), `lipgloss`를 사용한다.
 - 퍼지 검색은 별도 라이브러리 없이 부분 문자열 + 단어 단위 매칭으로 직접 구현한다. 필요하면 `sahilm/fuzzy`를 검토한다.
