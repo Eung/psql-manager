@@ -7,7 +7,7 @@ Commands:
   edit     change a service; .pgpass follows host/port/dbname/user
   rm       remove a service and its managed .pgpass entry
   search   search name, desc, tags, host and dbname
-  connect  connect with psql (pick from a list without a name)
+  connect  connect with psql (pick in the TUI without a name)
   test     check that psql can connect (select 1)
   doctor   check both files for problems
   path     print the files and psql in use

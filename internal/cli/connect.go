@@ -5,14 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 	"sync"
 	"text/tabwriter"
 
 	"github.com/Eung/psql-manager/internal/connect"
 	"github.com/Eung/psql-manager/internal/history"
 	"github.com/Eung/psql-manager/internal/store"
+	"github.com/Eung/psql-manager/internal/tui"
 )
 
 // errConnect는 접속 테스트가 실패했다는 뜻이다. 종료 코드 5로 끝난다.
@@ -36,9 +35,15 @@ func (a *App) history() (*history.History, error) {
 // sortByHistory는 서비스를 최근 접속 순으로, 이력이 없는 서비스는 이름순으로 정렬한다.
 // 이력을 읽지 못하면 경고만 하고 이름순으로 정렬한다.
 func (a *App) sortByHistory(svcs []store.Service) []store.Service {
+	return a.sortServices(svcs, true)
+}
+
+// sortServices는 sortByHistory와 같지만, warn이 false면 경고를 출력하지 않는다.
+// TUI가 화면을 차지하고 있을 때 stderr에 쓰면 화면이 깨지기 때문이다.
+func (a *App) sortServices(svcs []store.Service, warn bool) []store.Service {
 	var entries []history.Entry
 	if h, err := a.history(); err == nil {
-		if entries, err = h.Load(); err != nil {
+		if entries, err = h.Load(); err != nil && warn {
 			fmt.Fprintf(a.Stderr, "psql-manager: warning: cannot read history: %v\n", err)
 		}
 	}
@@ -76,14 +81,23 @@ func (a *App) cmdConnect(args []string) error {
 		if _, err := st.Get(name); err != nil {
 			return notFound(name, err)
 		}
-	} else {
-		if name, err = a.pick(st); err != nil || name == "" {
-			return err
-		}
+	} else if !a.IsTerminal() {
+		return usagef("no service name given; pass a name when not on a terminal")
 	}
+	// TUI를 띄우기 전에 psql을 찾아 둔다. 고른 뒤에 없다는 걸 알면 헛수고다.
 	psql, _, err := connect.FindPsql(a.Getenv)
 	if err != nil {
 		return err
+	}
+	if name == "" {
+		name, err = a.RunTUI(tui.Config{
+			Store: st,
+			Sort:  func(s []store.Service) []store.Service { return a.sortServices(s, false) },
+			Test:  func(ctx context.Context, n string) connect.Result { return connect.Test(ctx, psql, n) },
+		})
+		if err != nil || name == "" {
+			return err
+		}
 	}
 	// 이력을 쓰지 못해도 접속은 막지 않는다.
 	if h, err := a.history(); err == nil {
@@ -96,40 +110,6 @@ func (a *App) cmdConnect(args []string) error {
 		return fmt.Errorf("run %s: %w", psql, err)
 	}
 	return nil
-}
-
-// pick은 번호 선택 화면을 보여 주고 고른 서비스 이름을 돌려준다. 빈 입력이면 ""다.
-func (a *App) pick(st *store.Store) (string, error) {
-	if !a.IsTerminal() {
-		return "", usagef("no service name given; pass a name when not on a terminal")
-	}
-	svcs, err := st.List()
-	if err != nil {
-		return "", err
-	}
-	if len(svcs) == 0 {
-		return "", usagef("no services; add one with 'psql-manager add <name>'")
-	}
-	svcs = a.sortByHistory(svcs)
-	tw := tabwriter.NewWriter(a.Stderr, 0, 4, 2, ' ', 0)
-	for i, s := range svcs {
-		fmt.Fprintf(tw, "%3d\t%s\t%s\n", i+1, s.Name, s.Desc)
-	}
-	tw.Flush()
-	ans, err := a.prompt(fmt.Sprintf("Select a service [1-%d] (empty to cancel): ", len(svcs)))
-	if err != nil {
-		return "", err
-	}
-	ans = strings.TrimSpace(ans)
-	if ans == "" {
-		fmt.Fprintln(a.Stderr, "canceled")
-		return "", nil
-	}
-	n, err := strconv.Atoi(ans)
-	if err != nil || n < 1 || n > len(svcs) {
-		return "", usagef("invalid choice %q", ans)
-	}
-	return svcs[n-1].Name, nil
 }
 
 func (a *App) cmdTest(args []string) error {

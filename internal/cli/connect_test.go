@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/Eung/psql-manager/internal/history"
+	"github.com/Eung/psql-manager/internal/tui"
 )
 
 // execCall은 가짜 Exec가 받은 인자다.
@@ -104,49 +105,77 @@ func TestConnectUsage(t *testing.T) {
 	}
 }
 
-func TestPickerUsesHistoryOrder(t *testing.T) {
+// fakeTUI는 RunTUI를 대신해 받은 설정을 기록하고 choice를 고른 것처럼 돌려준다.
+func fakeTUI(ta *ttyApp, choice string, err error) *[]string {
+	var order []string
+	ta.RunTUI = func(cfg tui.Config) (string, error) {
+		svcs, lerr := cfg.Store.List()
+		if lerr != nil {
+			return "", lerr
+		}
+		for _, s := range cfg.Sort(svcs) {
+			order = append(order, s.Name)
+		}
+		return choice, err
+	}
+	return &order
+}
+
+func TestNoArgsOpensTUIAndConnects(t *testing.T) {
 	ta, calls := withServices(t, "")
 	ta.IsTerminal = func() bool { return true }
-	// b에 먼저 접속해 두면 목록 맨 위에 온다.
-	ta.Run([]string{"connect", "b"})
-	ta.stderr.Reset()
-	ta.Stdin = strings.NewReader("2\n")
-	if code := ta.Run(nil); code != 0 { // 인자 없이 실행하면 번호 선택 화면
+	ta.Run([]string{"connect", "b"}) // b에 먼저 접속해 두면 TUI 목록 맨 위에 온다
+	order := fakeTUI(ta, "a", nil)
+	if code := ta.Run(nil); code != 0 {
 		t.Fatalf("exit %d: %s", code, ta.stderr.String())
 	}
-	out := ta.stderr.String()
-	if !(strings.Index(out, "1  b") < strings.Index(out, "2  a") && strings.Index(out, "2  a") < strings.Index(out, "3  c")) {
-		t.Errorf("picker order:\n%s", out)
+	if !slices.Equal(*order, []string{"b", "a", "c"}) {
+		t.Errorf("TUI order = %v", *order)
 	}
-	if !strings.Contains(out, "desc of a") || !strings.Contains(out, "Select a service [1-3]") {
-		t.Errorf("picker output:\n%s", out)
+	if last := (*calls)[len(*calls)-1].argv; !slices.Equal(last[1:], []string{"service=a"}) {
+		t.Errorf("exec argv = %q", last)
 	}
-	if last := (*calls)[len(*calls)-1].argv[1]; last != "service=a" {
-		t.Errorf("picked %s, want service=a", last)
-	}
-}
-
-func TestPickerCancelAndInvalid(t *testing.T) {
-	cases := []struct {
-		input string
-		code  int
-	}{{"\n", 0}, {"9\n", exitUsage}, {"x\n", exitUsage}, {"", exitUsage}}
-	for _, c := range cases {
-		ta, calls := withServices(t, c.input)
-		ta.IsTerminal = func() bool { return true }
-		if code := ta.Run([]string{"connect"}); code != c.code {
-			t.Errorf("input %q: exit %d, want %d (%s)", c.input, code, c.code, ta.stderr.String())
-		}
-		if len(*calls) != 0 {
-			t.Errorf("input %q: exec called", c.input)
-		}
+	if got := ta.historyNames(t); !slices.Equal(got, []string{"b", "a"}) {
+		t.Errorf("history = %v", got)
 	}
 }
 
-func TestPickerNoServices(t *testing.T) {
-	ta := newTTYApp(t, "1\n")
-	if code := ta.Run(nil); code != exitUsage || !strings.Contains(ta.stderr.String(), "no services") {
-		t.Errorf("exit %d: %s", code, ta.stderr.String())
+func TestConnectWithoutNameKeepsPsqlArgs(t *testing.T) {
+	ta, calls := withServices(t, "")
+	ta.IsTerminal = func() bool { return true }
+	fakeTUI(ta, "c", nil)
+	if code := ta.Run([]string{"connect", "--", "-c", "select 1"}); code != 0 {
+		t.Fatalf("exit %d: %s", code, ta.stderr.String())
+	}
+	if argv := (*calls)[0].argv; !slices.Equal(argv[1:], []string{"service=c", "-c", "select 1"}) {
+		t.Errorf("exec argv = %q", argv)
+	}
+}
+
+func TestTUICancelAndError(t *testing.T) {
+	ta, calls := withServices(t, "")
+	ta.IsTerminal = func() bool { return true }
+	fakeTUI(ta, "", nil)
+	if code := ta.Run(nil); code != 0 || len(*calls) != 0 {
+		t.Errorf("cancel: exit %d, exec calls %d", code, len(*calls))
+	}
+	fakeTUI(ta, "", errors.New("no tty"))
+	if code := ta.Run([]string{"connect"}); code != exitFile || len(*calls) != 0 {
+		t.Errorf("TUI error: exit %d, exec calls %d", code, len(*calls))
+	}
+}
+
+func TestTUINotOpenedWithoutTerminalOrPsql(t *testing.T) {
+	ta, _ := withServices(t, "")
+	opened := false
+	ta.RunTUI = func(tui.Config) (string, error) { opened = true; return "", nil }
+	if code := ta.Run([]string{"connect"}); code != exitUsage || opened {
+		t.Errorf("no terminal: exit %d, opened %v", code, opened)
+	}
+	ta.IsTerminal = func() bool { return true }
+	delete(ta.env, "PSQL_MANAGER_PSQL")
+	if code := ta.Run(nil); code != exitFile || opened {
+		t.Errorf("no psql: exit %d, opened %v", code, opened)
 	}
 }
 
