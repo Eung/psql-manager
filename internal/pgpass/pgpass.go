@@ -299,29 +299,40 @@ func (f *File) owner(i int) string {
 func (f *File) Records() []Record {
 	var out []Record
 	for i, l := range f.lines {
-		if l.kind != kindEntry {
-			continue
+		if l.kind == kindEntry {
+			out = append(out, f.record(i))
 		}
-		out = append(out, Record{
-			Entry:    l.entry,
-			Owner:    f.owner(i),
-			Line:     i + 1,
-			Wildcard: slices.Contains(l.wild[:], true),
-		})
 	}
 	return out
+}
+
+// record는 lines[i] 항목 줄을 Record로 만든다.
+func (f *File) record(i int) Record {
+	l := f.lines[i]
+	return Record{
+		Entry:    l.entry,
+		Owner:    f.owner(i),
+		Line:     i + 1,
+		Wildcard: slices.Contains(l.wild[:], true),
+	}
 }
 
 // Lookup은 libpq처럼 접속 파라미터와 일치하는 첫 항목을 돌려준다. 소켓 host는
 // "localhost"로 찾는다.
 func (f *File) Lookup(host, port, database, user string) (Entry, bool) {
+	r, ok := f.LookupRecord(host, port, database, user)
+	return r.Entry, ok
+}
+
+// LookupRecord는 Lookup과 같지만 일치한 줄의 소유자와 줄 번호도 함께 돌려준다.
+func (f *File) LookupRecord(host, port, database, user string) (Record, bool) {
 	want := [4]string{NormalizeHost(host), port, database, user}
-	for _, l := range f.lines {
+	for i, l := range f.lines {
 		if l.matches(want) {
-			return l.entry, true
+			return f.record(i), true
 		}
 	}
-	return Entry{}, false
+	return Record{}, false
 }
 
 // matches는 l이 want(host, port, database, user)에 대해 libpq가 사용할
@@ -353,6 +364,9 @@ func (f *File) marker(name string) int {
 func (f *File) managedEntry(m int) bool {
 	return m+1 < len(f.lines) && f.lines[m+1].kind == kindEntry
 }
+
+// HasMarker는 name의 표식 주석이 있는지 알려 준다. 표식 아래에 항목 줄이 없어도 true다.
+func (f *File) HasMarker(name string) bool { return f.marker(name) >= 0 }
 
 // Managed는 서비스 name이 소유한 항목을 돌려준다.
 func (f *File) Managed(name string) (Entry, bool) {

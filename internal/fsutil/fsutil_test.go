@@ -241,6 +241,44 @@ func TestSymlinkLoop(t *testing.T) {
 	}
 }
 
+func TestRollback(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "f")
+	if err := WriteFile(p, []byte("v1")); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFile(p, []byte("v2")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rollback(p, true); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, p); got != "v1" {
+		t.Errorf("after Rollback(existed) = %q, want v1", got)
+	}
+
+	created := filepath.Join(dir, "new")
+	if err := WriteFile(created, []byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rollback(created, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(created); !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("new file still exists: %v", err)
+	}
+	if err := Rollback(created, false); err != nil {
+		t.Errorf("Rollback of missing file: %v", err)
+	}
+	loop := filepath.Join(dir, "loop")
+	if err := os.Symlink(loop, loop); err != nil {
+		t.Fatal(err)
+	}
+	if err := Rollback(loop, false); err == nil {
+		t.Error("Rollback through a symlink loop succeeded")
+	}
+}
+
 func TestRestoreWithoutBackup(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "f")
 	if err := Restore(p); !errors.Is(err, fs.ErrNotExist) {

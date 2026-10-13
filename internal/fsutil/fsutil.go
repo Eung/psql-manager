@@ -180,6 +180,22 @@ func Restore(path string) error {
 	return p.Commit()
 }
 
+// Rollback은 Commit으로 바꾼 파일을 되돌린다. existed가 true면 .bak에서 복구하고,
+// false면(이번에 새로 만든 파일) 지운다.
+func Rollback(path string, existed bool) error {
+	if existed {
+		return Restore(path)
+	}
+	target, err := Resolve(path)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(target); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("fsutil: remove %s: %w", target, err)
+	}
+	return nil
+}
+
 // FixPerm은 path가 가리키는 파일의 권한을 FileMode로 맞춘다. 호출하는 쪽에서
 // 경고할 수 있도록 이전 권한과 변경 여부를 돌려준다. 파일이 없으면 변경 없음으로 본다.
 func FixPerm(path string) (old fs.FileMode, changed bool, err error) {

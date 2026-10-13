@@ -122,6 +122,21 @@ func TestLookup(t *testing.T) {
 	}
 }
 
+func TestLookupRecord(t *testing.T) {
+	f := mustParse(t, sample)
+	r, ok := f.LookupRecord("db.example.com", "5432", "settledb", "readonly")
+	if !ok || r.Owner != "prod-settle-ro" || r.Line != 5 || r.Wildcard {
+		t.Errorf("record = %v, %v", r, ok)
+	}
+	r, ok = f.LookupRecord("x", "1", "d", "u")
+	if !ok || r.Owner != "" || r.Line != 10 || !r.Wildcard {
+		t.Errorf("wildcard record = %v, %v", r, ok)
+	}
+	if _, ok := mustParse(t, "").LookupRecord("x", "1", "d", "u"); ok {
+		t.Error("empty file matched")
+	}
+}
+
 func TestManaged(t *testing.T) {
 	f := mustParse(t, sample)
 	e, ok := f.Managed("prod-settle-ro")
@@ -339,6 +354,9 @@ func TestMarkerWithoutEntry(t *testing.T) {
 	f := mustParse(t, in)
 	if _, ok := f.Managed("x"); ok {
 		t.Error("marker separated by a blank line must not own the entry")
+	}
+	if !f.HasMarker("x") || f.HasMarker("y") {
+		t.Error("HasMarker is wrong")
 	}
 	if recs := f.Records(); len(recs) != 1 || recs[0].Owner != "" {
 		t.Errorf("records = %v", recs)
