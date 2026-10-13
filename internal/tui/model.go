@@ -3,6 +3,7 @@ package tui
 
 import (
 	"context"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -90,8 +91,22 @@ func New(cfg Config) (*Model, error) {
 // Init은 bubbletea 모델 인터페이스를 구현한다.
 func (m *Model) Init() tea.Cmd { return textinput.Blink }
 
+// pkgPrefix는 하위 패키지가 오류 메시지 앞에 붙이는 출처다. 화면에는 보이지 않게 뗀다.
+var pkgPrefix = regexp.MustCompile(`(^|: |\n)(?:store|svcfile|pgpass|fsutil|connect|history): `)
+
 func (m *Model) setStatus(s string) { m.status, m.statusErr = s, false }
-func (m *Model) setError(s string)  { m.status, m.statusErr = s, true }
+func (m *Model) setError(s string)  { m.status, m.statusErr = stripPrefixes(s), true }
+
+// stripPrefixes는 패키지 접두어를 메시지 맨 앞이나 ": " 바로 뒤에서만 뗀다.
+func stripPrefixes(s string) string {
+	for {
+		t := pkgPrefix.ReplaceAllString(s, "${1}")
+		if t == s {
+			return s
+		}
+		s = t
+	}
+}
 
 // reload는 서비스 목록을 다시 읽고, 가능하면 keep을 선택한 상태로 둔다.
 func (m *Model) reload(keep string) error {

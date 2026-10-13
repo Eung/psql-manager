@@ -1,1 +1,2 @@
-psql-manager: store: service file has lines libpq cannot parse; fix them before editing: $TMP/pg_service.conf: svcfile: line 2: expected key=value
+psql-manager: service file has lines libpq cannot parse; fix them before editing: $TMP/pg_service.conf: line 2: expected key=value
+hint: run 'psql-manager doctor' to list the lines to fix

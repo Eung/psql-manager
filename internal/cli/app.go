@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -119,7 +121,10 @@ func (a *App) Run(args []string) int {
 	if err == nil || errors.Is(err, errHelp) {
 		return exitOK
 	}
-	fmt.Fprintf(a.Stderr, "psql-manager: %v\n", err)
+	fmt.Fprintf(a.Stderr, "psql-manager: %s\n", message(err))
+	if h := hint(err); h != "" {
+		fmt.Fprintf(a.Stderr, "hint: %s\n", h)
+	}
 	code := exitCode(err)
 	if code == exitUsage {
 		fmt.Fprintln(a.Stderr, "Run 'psql-manager help' for usage.")
@@ -173,15 +178,33 @@ func findCommand(name string) *command {
 }
 
 func (a *App) printUsage(w io.Writer) {
+	fmt.Fprintln(w, "psql-manager keeps ~/.pg_service.conf and ~/.pgpass in sync, one service at a time.")
+	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Usage: psql-manager <command> [arguments]")
+	fmt.Fprintln(w, "       psql-manager              (on a terminal: pick a service in the TUI and connect)")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
 	for _, c := range commands {
 		fmt.Fprintf(w, "  %-8s %s\n", c.name, c.summary)
 	}
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Run 'psql-manager help <command>' for details.")
+	fmt.Fprint(w, generalHelp)
 }
+
+// generalHelp는 최상위 도움말의 뒷부분이다.
+const generalHelp = `
+Environment:
+  PGSERVICEFILE      service file (default ~/.pg_service.conf)
+  PGPASSFILE         password file (default ~/.pgpass)
+  PSQL_MANAGER_PSQL  psql to run (default: psql in PATH)
+  XDG_STATE_HOME     connection history goes to $XDG_STATE_HOME/psql-manager/history
+                     (default ~/.local/state/psql-manager/history)
+
+Exit codes:
+  0 success, 2 usage error, 3 service not found, 4 file or permission error,
+  5 connection failed
+
+Run 'psql-manager help <command>' for details.
+`
 
 func (a *App) printCommandUsage(w io.Writer, c *command) {
 	fmt.Fprintf(w, "Usage: psql-manager %s %s\n\n%s\n", c.name, c.args, c.summary)
@@ -195,7 +218,13 @@ var commandHelp = map[string]string{
 	"add": serviceOptionsHelp + `  --password-stdin   read the password from the first line of stdin
 
 On a terminal, the password is always prompted (empty for none). When no
-connection option is given, the other values are prompted too.
+connection option is given, the other values are prompted too. A password
+needs --port, --db and --user so that libpq can find it in .pgpass.
+
+Examples:
+  psql-manager add prod-ro --host db.example.com --port 5432 --db app \
+      --user readonly --desc "production, read only" --tags prod,readonly
+  printf '%s\n' "$PW" | psql-manager add ci --port 5432 --db app --user ci --password-stdin
 `,
 	"edit": serviceOptionsHelp + `  --rename <new>     rename the service (only the .pgpass marker changes)
   --password-stdin   set the password from the first line of stdin
@@ -203,24 +232,49 @@ connection option is given, the other values are prompted too.
   --remove-password  delete the managed .pgpass entry
 
 An empty value removes the key, e.g. --port "" or --option sslmode=.
+When host, port, dbname or user change, the managed .pgpass entry follows.
+
+Examples:
+  psql-manager edit prod-ro --port 6432 --option sslmode=require
+  psql-manager edit prod-ro --rename settle-ro
+  psql-manager edit prod-ro --change-password
 `,
 	"list": `Options:
   --tag <t>   only services with this tag
   --json      print JSON
+
+Services are listed by most recent connection, then by name. PASSWORD is
+managed (.pgpass entry owned by the service), unmanaged (a hand-written
+line matches), shared (another service's entry matches) or none.
 `,
 	"show": `Options:
   --reveal-password  print the password instead of masking it
   --json             print JSON (never includes the password)
+
+Each value shows where it comes from: the service file, an environment
+variable (PGHOST, PGPORT, PGDATABASE, PGUSER) or a libpq default.
 `,
 	"rm": `Options:
-  -y, --yes   do not ask for confirmation
+  -y, --yes   do not ask for confirmation (required when not on a terminal)
+
+Lines in .pgpass without a "# psql-manager:<name>" marker are never removed.
+`,
+	"path": `Shows the service file, the password file and the psql binary in use,
+and where each path comes from.
 `,
 	"search": `Options:
   --json   print JSON
+
+Every word must appear in the name, desc, tags, host or dbname
+(case-insensitive). Name matches rank first.
 `,
 	"connect": `Replaces this process with psql "service=<name>". Arguments after --
 are passed to psql as they are. Without a name, pick a service in the TUI
 (also shown when psql-manager runs without arguments on a terminal).
+
+Examples:
+  psql-manager connect prod-ro
+  psql-manager connect prod-ro -- -c 'select now()'
 `,
 	"test": `Runs psql "service=<name> connect_timeout=3" -w -X -Atc "select 1".
 Exits with 5 when a connection fails.
@@ -245,6 +299,52 @@ const serviceOptionsHelp = `Options:
   --tags <a,b>       comma-separated tags
   --option <k=v>     other libpq parameter, repeatable
 `
+
+// pkgPrefix는 하위 패키지가 오류 메시지 앞에 붙이는 출처다. 사용자에게는 보이지 않게 뗀다.
+// 메시지 맨 앞이나 감싼 오류의 경계(": ") 바로 뒤에 있을 때만 떼어, 일반 단어나
+// 경로(.../history: ...)는 건드리지 않는다.
+var pkgPrefix = regexp.MustCompile(`(^|: |\n)(?:store|svcfile|pgpass|fsutil|connect|history): `)
+
+// message는 사용자에게 보여 줄 오류 메시지를 만든다.
+func message(err error) string {
+	return stripPrefixes(err.Error())
+}
+
+// stripPrefixes는 패키지 접두어가 더 없을 때까지 뗀다("store: svcfile: ..."처럼 이어진 경우).
+func stripPrefixes(s string) string {
+	for {
+		t := pkgPrefix.ReplaceAllString(s, "${1}")
+		if t == s {
+			return s
+		}
+		s = t
+	}
+}
+
+// warnf는 경고를 stderr에 쓴다. 오류 메시지처럼 패키지 접두어를 뗀다.
+func (a *App) warnf(format string, args ...any) {
+	msg := stripPrefixes(fmt.Sprintf(format, args...))
+	fmt.Fprintf(a.Stderr, "psql-manager: warning: %s\n", msg)
+}
+
+// hint는 원인을 바로 알기 어려운 오류에 다음에 할 일을 한 줄로 알려 준다.
+func hint(err error) string {
+	switch {
+	case errors.Is(err, store.ErrMissingField):
+		return "pass --port, --db and --user, or add the service without a password"
+	case errors.Is(err, store.ErrKeyConflict):
+		return "services with the same host:port:dbname:user share one .pgpass entry; add this one without a password"
+	case errors.Is(err, store.ErrShadowed):
+		return "libpq uses the first matching .pgpass line; remove or move that line, then retry"
+	case errors.Is(err, store.ErrInvalidServiceFile), errors.Is(err, store.ErrInvalidPgpass):
+		return "run 'psql-manager doctor' to list the lines to fix"
+	case errors.Is(err, store.ErrLocked):
+		return "wait for the other process to finish, then retry"
+	case errors.Is(err, fs.ErrPermission):
+		return "check the file permissions; 'psql-manager path' shows the files in use"
+	}
+	return ""
+}
 
 // exitCode는 오류를 명세 4절의 종료 코드로 바꾼다.
 func exitCode(err error) int {
@@ -273,7 +373,7 @@ func (a *App) openStore() (*store.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	st.Warn = func(msg string) { fmt.Fprintf(a.Stderr, "psql-manager: warning: %s\n", msg) }
+	st.Warn = func(msg string) { a.warnf("%s", msg) }
 	return st, nil
 }
 

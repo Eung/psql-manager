@@ -1,1 +1,1 @@
-psql-manager: connect: psql not found; install the PostgreSQL client or set PSQL_MANAGER_PSQL
+psql-manager: psql not found; install the PostgreSQL client or set PSQL_MANAGER_PSQL

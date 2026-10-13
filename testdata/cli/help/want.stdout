@@ -1,4 +1,7 @@
+psql-manager keeps ~/.pg_service.conf and ~/.pgpass in sync, one service at a time.
+
 Usage: psql-manager <command> [arguments]
+       psql-manager              (on a terminal: pick a service in the TUI and connect)
 
 Commands:
   add      add a service to both files
@@ -11,5 +14,16 @@ Commands:
   test     check that psql can connect (select 1)
   doctor   check both files for problems
   path     print the files and psql in use
+
+Environment:
+  PGSERVICEFILE      service file (default ~/.pg_service.conf)
+  PGPASSFILE         password file (default ~/.pgpass)
+  PSQL_MANAGER_PSQL  psql to run (default: psql in PATH)
+  XDG_STATE_HOME     connection history goes to $XDG_STATE_HOME/psql-manager/history
+                     (default ~/.local/state/psql-manager/history)
+
+Exit codes:
+  0 success, 2 usage error, 3 service not found, 4 file or permission error,
+  5 connection failed
 
 Run 'psql-manager help <command>' for details.

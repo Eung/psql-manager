@@ -13,4 +13,10 @@ Options:
   --password-stdin   read the password from the first line of stdin
 
 On a terminal, the password is always prompted (empty for none). When no
-connection option is given, the other values are prompted too.
+connection option is given, the other values are prompted too. A password
+needs --port, --db and --user so that libpq can find it in .pgpass.
+
+Examples:
+  psql-manager add prod-ro --host db.example.com --port 5432 --db app \
+      --user readonly --desc "production, read only" --tags prod,readonly
+  printf '%s\n' "$PW" | psql-manager add ci --port 5432 --db app --user ci --password-stdin

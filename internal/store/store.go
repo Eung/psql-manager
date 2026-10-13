@@ -25,6 +25,9 @@ var (
 	ErrInvalidServiceFile = errors.New("store: service file has lines libpq cannot parse; fix them before editing")
 	ErrInvalidPgpass      = errors.New("store: .pgpass has malformed lines; fix them before editing")
 	ErrInvalidInput       = errors.New("store: invalid input")
+
+	// ErrLocked는 다른 psql-manager 프로세스가 파일을 고치고 있다는 뜻이다.
+	ErrLocked = fsutil.ErrLocked
 )
 
 // inputErrors는 사용자가 준 값이 잘못되었다는 하위 패키지 오류다. mutate는 이 오류를

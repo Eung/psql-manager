@@ -147,7 +147,7 @@ func (m *Model) submit() {
 			}
 		}
 		if err := m.cfg.Store.Add(svc, f.value(fPassword)); err != nil {
-			f.err = err.Error()
+			f.err = stripPrefixes(err.Error())
 			return
 		}
 		m.finishForm(name, "추가했습니다: "+name)
@@ -183,7 +183,7 @@ func (m *Model) submit() {
 		return
 	}
 	if err := m.cfg.Store.Update(orig.Name, u); err != nil {
-		f.err = err.Error()
+		f.err = stripPrefixes(err.Error())
 		return
 	}
 	m.finishForm(name, "저장했습니다: "+name)

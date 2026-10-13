@@ -265,6 +265,34 @@ func TestParseInterspersedAndDoubleDash(t *testing.T) {
 	}
 }
 
+func TestMessageStripsOnlyPackagePrefixes(t *testing.T) {
+	cases := map[string]string{
+		"store: invalid input: svcfile: value must not contain line breaks": "invalid input: value must not contain line breaks",
+		"store: svcfile: nested":                                     "nested",
+		"cannot write history: mkdir /x/history: not a directory":    "cannot write history: mkdir /x/history: not a directory",
+		"read /home/u/.local/state/psql-manager/history: is a dir":   "read /home/u/.local/state/psql-manager/history: is a dir",
+		"a\npgpass: line 2: bad":                                     "a\nline 2: bad",
+		"x: /p/pg_service.conf: svcfile: line 2: expected key=value": "x: /p/pg_service.conf: line 2: expected key=value",
+	}
+	for in, want := range cases {
+		if got := stripPrefixes(in); got != want {
+			t.Errorf("stripPrefixes(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestHints(t *testing.T) {
+	for _, err := range []error{store.ErrMissingField, store.ErrKeyConflict, store.ErrShadowed,
+		store.ErrInvalidServiceFile, store.ErrInvalidPgpass, store.ErrLocked, os.ErrPermission} {
+		if hint(err) == "" {
+			t.Errorf("no hint for %v", err)
+		}
+	}
+	if hint(store.ErrNotFound) != "" {
+		t.Error("unexpected hint for ErrNotFound")
+	}
+}
+
 func TestExitCodes(t *testing.T) {
 	cases := []struct {
 		err  error

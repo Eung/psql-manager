@@ -44,7 +44,7 @@ func (a *App) sortServices(svcs []store.Service, warn bool) []store.Service {
 	var entries []history.Entry
 	if h, err := a.history(); err == nil {
 		if entries, err = h.Load(); err != nil && warn {
-			fmt.Fprintf(a.Stderr, "psql-manager: warning: cannot read history: %v\n", err)
+			a.warnf("cannot read history: %v", err)
 		}
 	}
 	names := make([]string, len(svcs))
@@ -103,7 +103,7 @@ func (a *App) cmdConnect(args []string) error {
 	if h, err := a.history(); err == nil {
 		err = h.Record(name)
 		if err != nil {
-			fmt.Fprintf(a.Stderr, "psql-manager: warning: cannot write history: %v\n", err)
+			a.warnf("cannot write history: %v", err)
 		}
 	}
 	if err := a.Exec(psql, connect.Argv(psql, name, extra), os.Environ()); err != nil {
@@ -217,7 +217,7 @@ func (a *App) cmdDoctor(args []string) error {
 		}
 		switch {
 		case errors.Is(err, store.ErrFixBlocked):
-			fmt.Fprintf(a.Stderr, "psql-manager: warning: %v\n", err)
+			a.warnf("%v", err)
 		case err != nil:
 			return err
 		}

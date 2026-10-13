@@ -1,1 +1,2 @@
-psql-manager: store: an earlier .pgpass line takes precedence over this password (line 2)
+psql-manager: an earlier .pgpass line takes precedence over this password (line 2)
+hint: libpq uses the first matching .pgpass line; remove or move that line, then retry

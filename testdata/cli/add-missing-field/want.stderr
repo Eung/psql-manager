@@ -1,2 +1,3 @@
-psql-manager: store: port, dbname and user are required to store a password
+psql-manager: port, dbname and user are required to store a password
+hint: pass --port, --db and --user, or add the service without a password
 Run 'psql-manager help' for usage.

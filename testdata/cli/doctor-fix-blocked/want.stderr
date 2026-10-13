@@ -1,2 +1,2 @@
-psql-manager: warning: store: fix the syntax errors first; fixes that edit the files were skipped
+psql-manager: warning: fix the syntax errors first; fixes that edit the files were skipped
 psql-manager: problems found: 3 errors
