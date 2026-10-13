@@ -258,6 +258,9 @@ psql:         /usr/bin/psql (PATH)
 
 - 폼의 비밀번호 칸은 항상 가립니다. 편집 폼에서 비워 두면 기존 비밀번호를 유지합니다.
 - 폼의 `options`는 libpq의 `options` 파라미터입니다. 폼에 없는 파라미터(`sslmode` 등)는 그대로 보존되고, `edit --option`으로 바꿉니다.
+- 추가 폼에는 기본값을 미리 넣어 둡니다. 필요하면 고치거나 지우면 됩니다.
+  - `port`: `5432`
+  - `options`: 시스템 시간대(`/etc/localtime` 심볼릭 링크가 가리키는 zoneinfo 경로)를 읽어 `-c timezone=Asia/Seoul` 형태로 넣습니다. `/etc/localtime`이 링크가 아니면(일반 파일로 복사한 경우 등) 비워 둡니다.
 - 터미널 폭이 80보다 좁으면 상세 패널을 접습니다.
 
 ## 환경변수

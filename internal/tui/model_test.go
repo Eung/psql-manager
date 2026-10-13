@@ -48,6 +48,7 @@ type harness struct {
 	svcPath string
 	ppPath  string
 	tested  []string
+	tz      string // 추가 폼에 미리 넣을 시간대
 }
 
 // newHarness는 임시 파일 위의 실제 Store로 모델을 만든다. 정렬은 이름 역순으로 해
@@ -55,7 +56,7 @@ type harness struct {
 func newHarness(t *testing.T, svc, pp string) *harness {
 	t.Helper()
 	dir := t.TempDir()
-	h := &harness{svcPath: filepath.Join(dir, "pg_service.conf"), ppPath: filepath.Join(dir, "pgpass")}
+	h := &harness{svcPath: filepath.Join(dir, "pg_service.conf"), ppPath: filepath.Join(dir, "pgpass"), tz: "Asia/Seoul"}
 	if svc != "" {
 		os.WriteFile(h.svcPath, []byte(svc), 0o600)
 	}
@@ -72,6 +73,8 @@ func newHarness(t *testing.T, svc, pp string) *harness {
 			slices.SortFunc(out, func(a, b store.Service) int { return strings.Compare(b.Name, a.Name) })
 			return out
 		},
+		// 실제 /etc/localtime에 의존하지 않도록 고정한다.
+		Timezone: func() string { return h.tz },
 		Test: func(_ context.Context, name string) connect.Result {
 			h.tested = append(h.tested, name)
 			if name == "stg-settle" {
@@ -341,6 +344,67 @@ func TestAddForm(t *testing.T) {
 	pp, _ := os.ReadFile(h.ppPath)
 	if !strings.Contains(string(pp), "# psql-manager:new-svc\nnew.example.com:5433:newdb:app:"+pwNew+"\n") {
 		t.Error("pgpass entry missing")
+	}
+}
+
+func TestAddFormPrefillsPortAndTimezone(t *testing.T) {
+	h := newHarness(t, baseSvc, basePgpass)
+	h.press("ctrl+a")
+	f := h.m.form
+	if f.inputs[fPort].Value() != "5432" || f.inputs[fOptions].Value() != "-c timezone=Asia/Seoul" {
+		t.Fatalf("prefill: port %q, options %q", f.inputs[fPort].Value(), f.inputs[fOptions].Value())
+	}
+	if v := h.m.View(); !strings.Contains(v, "5432") || !strings.Contains(v, "-c timezone=Asia/Seoul") {
+		t.Errorf("prefilled values not shown:\n%s", v)
+	}
+	// 이름만 넣고 저장하면 미리 넣은 값이 그대로 저장된다.
+	h.fill("tz-default")
+	h.press("enter")
+	svc, _ := os.ReadFile(h.svcPath)
+	if !strings.HasSuffix(string(svc), "\n[tz-default]\nport=5432\noptions=-c timezone=Asia/Seoul\n") {
+		t.Errorf("service file:\n%s", svc)
+	}
+
+	// 사용자가 미리 넣은 값을 고치거나 지울 수 있다.
+	h.press("ctrl+a")
+	h.fill("tz-custom")
+	h.m.form.setFocus(fPort)
+	h.fill("6432")
+	h.m.form.setFocus(fOptions)
+	h.fill("")
+	h.press("enter")
+	svc, _ = os.ReadFile(h.svcPath)
+	if !strings.HasSuffix(string(svc), "\n[tz-custom]\nport=6432\n") {
+		t.Errorf("service file:\n%s", svc)
+	}
+}
+
+func TestAddFormWithoutTimezone(t *testing.T) {
+	h := newHarness(t, baseSvc, basePgpass)
+	h.tz = "" // /etc/localtime에서 시간대를 알 수 없는 경우
+	h.press("ctrl+a")
+	if f := h.m.form; f.inputs[fOptions].Value() != "" || f.inputs[fPort].Value() != "5432" {
+		t.Errorf("options %q, port %q", f.inputs[fOptions].Value(), f.inputs[fPort].Value())
+	}
+}
+
+func TestEditFormIsNotPrefilled(t *testing.T) {
+	// dev에는 port와 options가 없다. 편집 폼은 서비스 값만 보여 주고 기본값을 넣지 않는다.
+	h := newHarness(t, baseSvc, basePgpass)
+	h.press("down", "down", "ctrl+e")
+	if f := h.m.form; f.orig.Name != "dev" || f.inputs[fPort].Value() != "" || f.inputs[fOptions].Value() != "" {
+		t.Errorf("edit form of %s: port %q, options %q", f.orig.Name, f.inputs[fPort].Value(), f.inputs[fOptions].Value())
+	}
+}
+
+func TestDefaultTimezoneSource(t *testing.T) {
+	// Timezone이 nil이면 /etc/localtime을 읽는다. 값은 시스템마다 다르므로 형식만 확인한다.
+	h := newHarness(t, baseSvc, basePgpass)
+	h.m.cfg.Timezone = nil
+	h.press("ctrl+a")
+	t.Logf("detected timezone on this system: %q", detectTimezone(localtimePath))
+	if v := h.m.form.inputs[fOptions].Value(); v != timezoneOption(detectTimezone(localtimePath)) {
+		t.Errorf("options = %q", v)
 	}
 }
 

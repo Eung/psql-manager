@@ -40,7 +40,9 @@ type form struct {
 	err    string
 }
 
-func newForm(orig *store.Service) *form {
+// newForm은 폼을 만든다. 추가 폼에는 port에 기본 포트를, options에 tz 시간대를
+// 미리 넣어 두고 사용자가 고치게 한다.
+func newForm(orig *store.Service, tz string) *form {
 	f := &form{orig: orig}
 	for i := range f.inputs {
 		in := textinput.New()
@@ -55,6 +57,8 @@ func newForm(orig *store.Service) *form {
 	f.inputs[fTags].Placeholder = "쉼표로 구분"
 	if orig == nil {
 		pw.Placeholder = "비워 두면 비밀번호 없음"
+		f.inputs[fPort].SetValue(defaultPort)
+		f.inputs[fOptions].SetValue(timezoneOption(tz))
 	} else {
 		pw.Placeholder = "비워 두면 기존 값 유지"
 		f.inputs[fName].SetValue(orig.Name)
@@ -93,7 +97,15 @@ func splitTags(s string) []string {
 
 func (m *Model) openForm(orig *store.Service) {
 	m.hide()
-	m.form = newForm(orig)
+	tz := ""
+	if orig == nil {
+		if m.cfg.Timezone != nil {
+			tz = m.cfg.Timezone()
+		} else {
+			tz = detectTimezone(localtimePath)
+		}
+	}
+	m.form = newForm(orig, tz)
 	m.mode = modeForm
 	m.search.Blur()
 	if orig == nil {

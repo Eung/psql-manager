@@ -21,6 +21,9 @@ type Config struct {
 	Sort func([]store.Service) []store.Service
 	// Test는 서비스 하나의 접속을 시험한다. 화면이 멈추지 않도록 tea.Cmd 안에서 부른다.
 	Test func(ctx context.Context, name string) connect.Result
+	// Timezone은 추가 폼의 options 칸에 미리 넣을 시간대(예: Asia/Seoul)를 돌려준다.
+	// nil이면 /etc/localtime 심볼릭 링크에서 읽는다. ""를 돌려주면 미리 넣지 않는다.
+	Timezone func() string
 }
 
 // mode는 화면의 현재 상태다.
