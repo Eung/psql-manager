@@ -23,6 +23,7 @@ var update = flag.Bool("update", false, "rewrite golden files")
 //	args                 한 줄에 인자 하나
 //	stdin                표준 입력(선택)
 //	env                  KEY=VALUE 한 줄씩(선택), 값의 $TMP는 임시 디렉터리
+//	history              접속 이력 파일(선택)
 //	service.conf, pgpass 실행 전 파일(없으면 파일 없음)
 //	want.service.conf    실행 후 기대 내용(없으면 실행 전과 같아야 함)
 //	want.pgpass          실행 후 기대 내용(없으면 실행 전과 같아야 함)
@@ -71,7 +72,8 @@ func runGolden(t *testing.T, dir string) {
 	// 실제 홈과 접속 환경변수의 영향을 받지 않도록 격리한다.
 	for k, v := range map[string]string{
 		"HOME": tmp, "PGSERVICEFILE": svcPath, "PGPASSFILE": ppPath, "PATH": "",
-		"PGHOST": "", "PGPORT": "", "PGDATABASE": "", "PGUSER": "", "PSQL_MANAGER_PSQL": "",
+		"XDG_STATE_HOME": filepath.Join(tmp, "state"),
+		"PGHOST":         "", "PGPORT": "", "PGDATABASE": "", "PGUSER": "", "PSQL_MANAGER_PSQL": "",
 	} {
 		t.Setenv(k, v)
 	}
@@ -79,6 +81,15 @@ func runGolden(t *testing.T, dir string) {
 		for _, line := range strings.Split(strings.TrimSpace(envText), "\n") {
 			k, v, _ := strings.Cut(line, "=")
 			t.Setenv(k, strings.ReplaceAll(v, "$TMP", tmp))
+		}
+	}
+	if hist, ok := readOpt(t, filepath.Join(dir, "history")); ok {
+		hp := filepath.Join(tmp, "state", "psql-manager", "history")
+		if err := os.MkdirAll(filepath.Dir(hp), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(hp, []byte(hist), 0o600); err != nil {
+			t.Fatal(err)
 		}
 	}
 	fakePsql := filepath.Join(tmp, "bin", "psql")

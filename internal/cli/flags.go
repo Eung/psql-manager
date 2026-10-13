@@ -28,20 +28,24 @@ func newFlagSet(name string) *flag.FlagSet {
 // parse는 플래그와 위치 인자가 섞여 있어도 모두 읽는다(예: add name --host h).
 // "--" 뒤의 인자는 플래그로 해석하지 않고 위치 인자로 돌려준다.
 func parse(fs *flag.FlagSet, args []string) ([]string, error) {
-	var rest []string
+	pos, rest, err := parseRest(fs, args)
+	return append(pos, rest...), err
+}
+
+// parseRest는 parse와 같지만 "--" 앞의 위치 인자와 뒤의 인자를 따로 돌려준다.
+func parseRest(fs *flag.FlagSet, args []string) (pos, rest []string, err error) {
 	for i, arg := range args {
 		if arg == "--" {
 			args, rest = args[:i], args[i+1:]
 			break
 		}
 	}
-	var pos []string
 	for {
 		if err := fs.Parse(args); err != nil {
 			if errors.Is(err, flag.ErrHelp) {
-				return nil, errHelp
+				return nil, nil, errHelp
 			}
-			return nil, usagef("%v", err)
+			return nil, nil, usagef("%v", err)
 		}
 		args = fs.Args()
 		if len(args) == 0 {
@@ -49,7 +53,7 @@ func parse(fs *flag.FlagSet, args []string) ([]string, error) {
 		}
 		pos, args = append(pos, args[0]), args[1:]
 	}
-	return append(pos, rest...), nil
+	return pos, rest, nil
 }
 
 // setFlags는 명령줄에 실제로 주어진 플래그 이름을 모은다.

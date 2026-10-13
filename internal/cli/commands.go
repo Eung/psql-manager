@@ -293,6 +293,7 @@ func (a *App) cmdList(args []string) error {
 	if err != nil {
 		return err
 	}
+	svcs = a.sortByHistory(svcs)
 	if setFlags(fs)["tag"] {
 		svcs = filterTag(svcs, *tag)
 	}
@@ -335,10 +336,12 @@ func (a *App) cmdSearch(args []string) error {
 	if err != nil {
 		return err
 	}
-	results, err := st.Search(query)
+	svcs, err := st.List()
 	if err != nil {
 		return err
 	}
+	// 점수가 같으면 최근 접속 순을 따른다.
+	results := store.Match(a.sortByHistory(svcs), query)
 	if *asJSON {
 		return a.printJSON(toJSONResults(results))
 	}
@@ -346,11 +349,11 @@ func (a *App) cmdSearch(args []string) error {
 		fmt.Fprintf(a.Stderr, "no services match %q\n", query)
 		return nil
 	}
-	svcs := make([]store.Service, len(results))
+	matched := make([]store.Service, len(results))
 	for i, r := range results {
-		svcs[i] = r.Service
+		matched[i] = r.Service
 	}
-	a.printTable(svcs)
+	a.printTable(matched)
 	return nil
 }
 

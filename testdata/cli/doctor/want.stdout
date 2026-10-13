@@ -1,0 +1,8 @@
+error    $TMP/pgpass:9            pgpass-syntax      expected 5 colon-separated fields; libpq ignores this line and psql-manager will not edit the file
+error    $TMP/pgpass:3            orphan-entry       service "removed-svc": entry is marked for a service that does not exist (fixable)
+error    $TMP/pgpass:6            entry-out-of-sync  service "prod-settle-rw": entry is for db.example.com:5432:settledb:wrong-user but the service uses db.example.com:5432:settledb:writer (fixable)
+warning  $TMP/pgpass:8            line-shadowed      never used: wildcard line 7 above it matches first; move the wildcard line below
+info     $TMP/pg_service.conf:34  no-password        service "dev-local": no .pgpass entry matches; psql will ask for a password unless the server needs none
+
+3 errors, 1 warning, 1 info
+run 'psql-manager doctor --fix' to fix 2 of them

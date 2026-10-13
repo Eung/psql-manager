@@ -18,16 +18,20 @@ type ttyApp struct {
 	*App
 	stdout, stderr  bytes.Buffer
 	svcPath, ppPath string
+	dir             string
+	env             map[string]string // Getenv가 돌려줄 값. HOME과 XDG_STATE_HOME은 임시 경로다.
 }
 
 func newTTYApp(t *testing.T, stdin string, passwords ...string) *ttyApp {
 	t.Helper()
 	dir := t.TempDir()
-	ta := &ttyApp{svcPath: filepath.Join(dir, "pg_service.conf"), ppPath: filepath.Join(dir, "pgpass")}
+	ta := &ttyApp{svcPath: filepath.Join(dir, "pg_service.conf"), ppPath: filepath.Join(dir, "pgpass"), dir: dir,
+		env: map[string]string{"HOME": dir, "XDG_STATE_HOME": filepath.Join(dir, "state")}}
 	a := New("test")
 	a.Stdin = strings.NewReader(stdin)
 	a.Stdout, a.Stderr = &ta.stdout, &ta.stderr
-	a.Getenv = func(string) string { return "" }
+	a.Getenv = func(k string) string { return ta.env[k] }
+	a.Exec = func(string, []string, []string) error { return errors.New("exec not expected in this test") }
 	a.IsTerminal = func() bool { return true }
 	a.ReadPassword = func() (string, error) {
 		if len(passwords) == 0 {

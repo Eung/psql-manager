@@ -1,0 +1,8 @@
+# psql-manager:prod-settle-ro
+db.example.com:5432:settledb:readonly:{{pw:ro}}
+# psql-manager:removed-svc
+old.example.com:5432:old:old:{{pw:old}}
+# psql-manager:prod-settle-rw
+db.example.com:5432:settledb:wrong-user:{{pw:rw}}
+stg.example.com:*:*:*:{{pw:stg-any}}
+stg.example.com:5432:settledb:app:{{pw:stg}}

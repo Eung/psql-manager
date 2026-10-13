@@ -1,0 +1,2 @@
+psql-manager: no service name given; pass a name when not on a terminal
+Run 'psql-manager help' for usage.

@@ -1,0 +1,7 @@
+fixed  $TMP/pgpass:3  orphan-entry       service "removed-svc": entry is marked for a service that does not exist
+fixed  $TMP/pgpass:6  entry-out-of-sync  service "prod-settle-rw": entry is for db.example.com:5432:settledb:wrong-user but the service uses db.example.com:5432:settledb:writer
+
+warning  $TMP/pgpass:6            line-shadowed  never used: wildcard line 5 above it matches first; move the wildcard line below
+info     $TMP/pg_service.conf:34  no-password    service "dev-local": no .pgpass entry matches; psql will ask for a password unless the server needs none
+
+0 errors, 1 warning, 1 info

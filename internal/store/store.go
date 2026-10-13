@@ -163,6 +163,8 @@ type snapshot struct {
 	ppOrig    []byte
 	svcExists bool
 	ppExists  bool
+	svcErr    error // 서비스 파일 파싱 오류(svcfile.ParseErrors)
+	ppErr     error // .pgpass 파싱 오류(pgpass.ParseErrors)
 }
 
 func readFile(path string) ([]byte, bool, error) {
@@ -182,6 +184,28 @@ func readFile(path string) ([]byte, bool, error) {
 // 고치도록 줄 번호와 함께 오류를 돌려주고(두 파일 모두 해당하면 둘 다 알린다),
 // 읽기일 때는 경고만 한다. 이해하지 못한 줄은 원문 그대로 보존한다.
 func (s *Store) load(strict bool) (*snapshot, error) {
+	sn, err := s.read()
+	if err != nil {
+		return nil, err
+	}
+	var invalid []error
+	if sn.svcErr != nil {
+		invalid = append(invalid, fmt.Errorf("%w: %s: %w", ErrInvalidServiceFile, s.ServicePath, sn.svcErr))
+	}
+	if sn.ppErr != nil {
+		invalid = append(invalid, fmt.Errorf("%w: %s: %w", ErrInvalidPgpass, s.PgpassPath, sn.ppErr))
+	}
+	if strict && len(invalid) > 0 {
+		return nil, errors.Join(invalid...)
+	}
+	for _, e := range invalid {
+		s.warn("%v", e)
+	}
+	return sn, nil
+}
+
+// read는 두 파일을 읽고 파싱만 한다. 파싱 오류는 snapshot에 담아 둔다.
+func (s *Store) read() (*snapshot, error) {
 	var sn snapshot
 	var err error
 	if sn.svcOrig, sn.svcExists, err = readFile(s.ServicePath); err != nil {
@@ -190,19 +214,8 @@ func (s *Store) load(strict bool) (*snapshot, error) {
 	if sn.ppOrig, sn.ppExists, err = readFile(s.PgpassPath); err != nil {
 		return nil, err
 	}
-	var invalid []error
-	if sn.svc, err = svcfile.Parse(sn.svcOrig); err != nil {
-		invalid = append(invalid, fmt.Errorf("%w: %s: %w", ErrInvalidServiceFile, s.ServicePath, err))
-	}
-	if sn.pp, err = pgpass.Parse(sn.ppOrig); err != nil {
-		invalid = append(invalid, fmt.Errorf("%w: %s: %w", ErrInvalidPgpass, s.PgpassPath, err))
-	}
-	if strict && len(invalid) > 0 {
-		return nil, errors.Join(invalid...)
-	}
-	for _, e := range invalid {
-		s.warn("%v", e)
-	}
+	sn.svc, sn.svcErr = svcfile.Parse(sn.svcOrig)
+	sn.pp, sn.ppErr = pgpass.Parse(sn.ppOrig)
 	return &sn, nil
 }
 
@@ -466,6 +479,23 @@ func (s *Store) Remove(name string) error {
 	})
 }
 
+// entryFor는 서비스 파일 값으로 pgpass 항목을 만든다. port, dbname, user가 없으면
+// ErrMissingField다. host는 pgpass에서 찾는 형태(소켓이면 localhost)로 바꾼다.
+func entryFor(params []Param, password string) (pgpass.Entry, error) {
+	svc := Service{Params: params}
+	e := pgpass.Entry{
+		Host:     pgpass.NormalizeHost(svc.Get("host")),
+		Port:     svc.Get("port"),
+		Database: svc.Get("dbname"),
+		User:     svc.Get("user"),
+		Password: password,
+	}
+	if e.Port == "" || e.Database == "" || e.User == "" {
+		return pgpass.Entry{}, ErrMissingField
+	}
+	return e, nil
+}
+
 // syncPassword는 name이 소유한 pgpass 줄을 params와 password에 맞춘다. password가
 // 비어 있으면 소유 줄을 지운다.
 func syncPassword(pp *pgpass.File, name string, params []Param, password string) error {
@@ -473,23 +503,9 @@ func syncPassword(pp *pgpass.File, name string, params []Param, password string)
 		pp.RemoveManaged(name)
 		return nil
 	}
-	get := func(key string) string {
-		for _, p := range params {
-			if p.Key == key {
-				return p.Value
-			}
-		}
-		return ""
-	}
-	e := pgpass.Entry{
-		Host:     pgpass.NormalizeHost(get("host")),
-		Port:     get("port"),
-		Database: get("dbname"),
-		User:     get("user"),
-		Password: password,
-	}
-	if e.Port == "" || e.Database == "" || e.User == "" {
-		return ErrMissingField
+	e, err := entryFor(params, password)
+	if err != nil {
+		return err
 	}
 	for _, r := range pp.Records() {
 		if r.Owner != "" && r.Owner != name && !r.Wildcard &&

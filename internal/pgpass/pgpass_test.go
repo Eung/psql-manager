@@ -358,6 +358,11 @@ func TestMarkerWithoutEntry(t *testing.T) {
 	if !f.HasMarker("x") || f.HasMarker("y") {
 		t.Error("HasMarker is wrong")
 	}
+	f2 := mustParse(t, sample+"# psql-manager:dangling\n")
+	want := []Marker{{"prod-settle-ro", 4, true}, {"dangling", 11, false}}
+	if got := f2.Markers(); !slices.Equal(got, want) {
+		t.Errorf("Markers = %v, want %v", got, want)
+	}
 	if recs := f.Records(); len(recs) != 1 || recs[0].Owner != "" {
 		t.Errorf("records = %v", recs)
 	}

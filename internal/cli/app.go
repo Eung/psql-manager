@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"syscall"
 
 	"golang.org/x/term"
 
@@ -19,6 +20,7 @@ const (
 	exitUsage    = 2
 	exitNotFound = 3
 	exitFile     = 4
+	exitConnect  = 5
 )
 
 // App은 CLI 실행에 필요한 입출력과 환경이다. 테스트에서 각 필드를 바꿔 끼운다.
@@ -35,6 +37,8 @@ type App struct {
 	ReadPassword func() (string, error)
 	// OpenStore는 사용할 Store를 만든다.
 	OpenStore func() (*store.Store, error)
+	// Exec는 현재 프로세스를 psql로 교체한다. 기본값은 syscall.Exec다.
+	Exec func(path string, argv, env []string) error
 
 	in *bufio.Reader
 }
@@ -54,6 +58,7 @@ func New(version string) *App {
 			b, err := term.ReadPassword(int(os.Stdin.Fd()))
 			return string(b), err
 		},
+		Exec: syscall.Exec,
 	}
 	a.OpenStore = func() (*store.Store, error) {
 		st, err := store.Open()
@@ -84,6 +89,9 @@ func init() {
 		{"edit", "<name> [options]", "change a service; .pgpass follows host/port/dbname/user", (*App).cmdEdit},
 		{"rm", "<name> [-y]", "remove a service and its managed .pgpass entry", (*App).cmdRm},
 		{"search", "<word>... [--json]", "search name, desc, tags, host and dbname", (*App).cmdSearch},
+		{"connect", "[name] [-- psql args...]", "connect with psql (pick from a list without a name)", (*App).cmdConnect},
+		{"test", "<name> | --all", "check that psql can connect (select 1)", (*App).cmdTest},
+		{"doctor", "[--fix]", "check both files for problems", (*App).cmdDoctor},
 		{"path", "", "print the files and psql in use", (*App).cmdPath},
 	}
 }
@@ -117,7 +125,10 @@ func (a *App) Run(args []string) int {
 
 func (a *App) run(args []string) error {
 	if len(args) == 0 {
-		// 대화형 선택 화면은 M4(번호 선택)와 M5(TUI)에서 붙인다.
+		// 터미널이면 번호 선택 화면으로 접속한다(M5에서 TUI로 바뀐다).
+		if a.IsTerminal() {
+			return a.cmdConnect(nil)
+		}
 		a.printUsage(a.Stderr)
 		return usagef("no command given")
 	}
@@ -203,6 +214,21 @@ An empty value removes the key, e.g. --port "" or --option sslmode=.
 	"search": `Options:
   --json   print JSON
 `,
+	"connect": `Replaces this process with psql "service=<name>". Arguments after --
+are passed to psql as they are. Without a name, pick a service from a list.
+`,
+	"test": `Runs psql "service=<name> connect_timeout=3" -w -X -Atc "select 1".
+Exits with 5 when a connection fails.
+
+Options:
+  --all   test every service
+`,
+	"doctor": `Checks both files and reports problems. Exits with 4 when errors remain.
+
+Options:
+  --fix   fix what can be fixed safely (permission, orphan entries,
+          out-of-sync entries)
+`,
 }
 
 const serviceOptionsHelp = `Options:
@@ -221,6 +247,10 @@ func exitCode(err error) int {
 	switch {
 	case errors.As(err, &ue):
 		return exitUsage
+	case errors.Is(err, errConnect):
+		return exitConnect
+	case errors.Is(err, errDoctor):
+		return exitFile
 	case errors.Is(err, store.ErrNotFound):
 		return exitNotFound
 	case errors.Is(err, store.ErrExists), errors.Is(err, store.ErrInvalidName),

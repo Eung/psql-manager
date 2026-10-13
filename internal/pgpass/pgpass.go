@@ -365,6 +365,24 @@ func (f *File) managedEntry(m int) bool {
 	return m+1 < len(f.lines) && f.lines[m+1].kind == kindEntry
 }
 
+// Marker는 "# psql-manager:<name>" 표식 주석 하나다.
+type Marker struct {
+	Name     string
+	Line     int  // 1부터 시작
+	HasEntry bool // 바로 다음 줄이 항목 줄인지
+}
+
+// Markers는 모든 표식을 파일 순서대로 돌려준다.
+func (f *File) Markers() []Marker {
+	var out []Marker
+	for i, l := range f.lines {
+		if l.owner != "" {
+			out = append(out, Marker{Name: l.owner, Line: i + 1, HasEntry: f.managedEntry(i)})
+		}
+	}
+	return out
+}
+
 // HasMarker는 name의 표식 주석이 있는지 알려 준다. 표식 아래에 항목 줄이 없어도 true다.
 func (f *File) HasMarker(name string) bool { return f.marker(name) >= 0 }
 

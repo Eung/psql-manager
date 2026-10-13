@@ -1,0 +1,2 @@
+psql-manager: test takes either a service name or --all
+Run 'psql-manager help' for usage.
