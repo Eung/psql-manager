@@ -28,7 +28,7 @@ func replaceOnce(t *testing.T, s, old, new string) string {
 	return strings.Replace(s, old, new, 1)
 }
 
-// assertBytes compares without printing contents, which may hold passwords.
+// assertBytes는 비밀번호가 들어 있을 수 있는 내용을 출력하지 않고 비교한다.
 func assertBytes(t *testing.T, f *File, want string) {
 	t.Helper()
 	got := string(f.Bytes())
@@ -133,29 +133,40 @@ func TestManaged(t *testing.T) {
 	}
 }
 
-// 명세 5.2: 새 줄은 첫 와일드카드 줄(일부 필드만 *인 줄 포함)과 그 바로 위에
-// 붙은 주석보다 위에 들어간다.
-func TestSetManagedInsertsAboveWildcard(t *testing.T) {
-	const pair = "# psql-manager:new-svc\nnew.example.com:5432:newdb:app:p\\:w\\\\#x\n"
-	partial := "localhost:5432:*:postgres:local\\:pw\n"
+// 새 줄은 그 줄을 가리게 될(일치하는) 첫 와일드카드 줄과, 그 바로 위에 붙은
+// 주석보다 위에 들어간다. 일치하는 와일드카드 줄이 없으면 파일 끝에 붙는다.
+func TestSetManagedInsertsAboveShadowingWildcard(t *testing.T) {
+	newSvc := Entry{"new.example.com", "5432", "newdb", "app", `p:w\#x`}
+	const newPair = "# psql-manager:new-svc\nnew.example.com:5432:newdb:app:p\\:w\\\\#x\n"
+	local := Entry{"localhost", "5432", "otherdb", "postgres", "pw"}
+	const localPair = "# psql-manager:new-svc\nlocalhost:5432:otherdb:postgres:pw\n"
+	const other = "# 다른 호스트\nother.example.com:*:*:*:pw\n"
 	cases := []struct {
 		name, in string
+		e        Entry
 		want     func(t *testing.T, in string) string
 	}{
-		{"partial wildcard first", sample, func(t *testing.T, in string) string { return pair + in }},
-		{"full wildcard only", replaceOnce(t, sample, partial, ""), func(t *testing.T, in string) string {
-			return replaceOnce(t, in, "# 기본값\n", pair+"# 기본값\n")
+		{"skips non-matching partial wildcard", sample, newSvc, func(t *testing.T, in string) string {
+			return replaceOnce(t, in, "# 기본값\n", newPair+"# 기본값\n")
+		}},
+		{"above matching partial wildcard and its comment", sample, local, func(t *testing.T, in string) string {
+			return localPair + in
+		}},
+		{"appends when no wildcard matches", other, newSvc, func(t *testing.T, in string) string {
+			return in + newPair
 		}},
 	}
 	for _, c := range cases {
 		for _, v := range variants {
 			t.Run(c.name+"/"+v.name, func(t *testing.T) {
 				f := mustParse(t, v.apply(c.in))
-				err := f.SetManaged("new-svc", Entry{"new.example.com", "5432", "newdb", "app", `p:w\#x`})
-				if err != nil {
+				if err := f.SetManaged("new-svc", c.e); err != nil {
 					t.Fatal(err)
 				}
 				assertBytes(t, f, v.apply(c.want(t, c.in)))
+				if got, ok := f.Lookup(c.e.Host, c.e.Port, c.e.Database, c.e.User); !ok || got != c.e {
+					t.Error("new entry is shadowed by another line")
+				}
 			})
 		}
 	}
@@ -230,16 +241,28 @@ func TestLiteralWildcardAndHashAreEscaped(t *testing.T) {
 	}
 }
 
-func TestEmptyHostWrittenAsLocalhost(t *testing.T) {
-	f := mustParse(t, "")
-	if err := f.SetManaged("sock", Entry{"", "5432", "db", "u", "pw"}); err != nil {
-		t.Fatal(err)
+// 소켓 접속(빈 host 또는 /로 시작하는 소켓 디렉터리)은 libpq처럼 localhost로 쓰고 찾는다.
+func TestSocketHostWrittenAsLocalhost(t *testing.T) {
+	for _, host := range []string{"", "/var/run/postgresql", "/tmp"} {
+		f := mustParse(t, "")
+		if err := f.SetManaged("sock", Entry{host, "5432", "db", "u", "pw"}); err != nil {
+			t.Fatal(err)
+		}
+		if got, want := string(f.Bytes()), "# psql-manager:sock\nlocalhost:5432:db:u:pw\n"; got != want {
+			t.Errorf("host %q: got %q, want %q", host, got, want)
+		}
+		for _, q := range []string{"", "/var/run/postgresql", "localhost"} {
+			if _, ok := f.Lookup(q, "5432", "db", "u"); !ok {
+				t.Errorf("Lookup host %q did not match localhost", q)
+			}
+		}
 	}
-	if e, _ := f.Managed("sock"); e.Host != "localhost" {
-		t.Errorf("host = %q, want localhost", e.Host)
-	}
-	if _, ok := f.Lookup("", "5432", "db", "u"); !ok {
-		t.Error("empty host did not match localhost")
+	for host, want := range map[string]string{
+		"db.example.com": "db.example.com", "127.0.0.1": "127.0.0.1", "relative/dir": "relative/dir",
+	} {
+		if got := NormalizeHost(host); got != want {
+			t.Errorf("NormalizeHost(%q) = %q, want %q", host, got, want)
+		}
 	}
 }
 
@@ -256,6 +279,9 @@ func TestSetManagedRejectsBadInput(t *testing.T) {
 		{"newline in host", Entry{"h\n", "1", "d", "u", "pw"}, "x", ErrInvalidValue},
 		{"empty password", Entry{"h", "1", "d", "u", ""}, "x", ErrEmptyPassword},
 		{"bad name", Entry{"h", "1", "d", "u", "pw"}, "a b", ErrInvalidName},
+		{"empty port", Entry{"h", "", "d", "u", "pw"}, "x", ErrMissingField},
+		{"empty database", Entry{"h", "1", "", "u", "pw"}, "x", ErrMissingField},
+		{"empty user", Entry{"h", "1", "d", "", "pw"}, "x", ErrMissingField},
 	}
 	for _, c := range checks {
 		if err := f.SetManaged(c.svc, c.e); !errors.Is(err, c.want) {

@@ -1,2 +1,2 @@
-// Package history records and reads the connection history.
+// Package history는 접속 이력을 기록하고 읽는다.
 package history

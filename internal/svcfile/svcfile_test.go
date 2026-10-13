@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// replaceOnce replaces old with new exactly once and fails if old is absent.
+// replaceOnce는 old를 new로 정확히 한 번 바꾸고, old가 없으면 테스트를 실패시킨다.
 func replaceOnce(t *testing.T, s, old, new string) string {
 	t.Helper()
 	if !strings.Contains(s, old) {
@@ -36,9 +36,8 @@ func mustSection(t *testing.T, f *File, name string) *Section {
 
 const rwBlock = "# desc: 운영 DB 쓰기\n[prod-settle-rw]\n  host = db.example.com   \nport=5432\n# 예전 포트: 6432\ndbname=settledb\nuser=writer\n\t\n"
 
-// TestEditsKeepOtherBytes applies one edit to the sample and checks the whole
-// output against the original with only the expected part replaced, for
-// every line-ending variant.
+// TestEditsKeepOtherBytes는 샘플에 편집을 하나 적용하고, 그 결과 전체를
+// "원문에서 기대한 부분만 바꾼 것"과 비교한다. 줄바꿈 변형마다 모두 확인한다.
 func TestEditsKeepOtherBytes(t *testing.T) {
 	sample := readSample(t)
 	cases := []struct {

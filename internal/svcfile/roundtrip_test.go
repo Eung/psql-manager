@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// readSample loads the comment-heavy sample service file from testdata.
+// readSample은 testdata에서 주석이 많은 샘플 서비스 파일을 읽는다.
 func readSample(t *testing.T) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "svcfile", "full.conf"))
@@ -18,7 +18,7 @@ func readSample(t *testing.T) string {
 	return string(b)
 }
 
-// variant is one way of encoding the same LF text: line endings and final newline.
+// variant는 같은 LF 텍스트를 줄바꿈 형식과 파일 끝 개행 유무로 바꿔 표현하는 방법 하나다.
 type variant struct {
 	name  string
 	apply func(string) string

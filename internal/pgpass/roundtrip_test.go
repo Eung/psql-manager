@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// sample mixes unmanaged lines, a managed pair, an invalid line and a wildcard.
+// sample에는 관리하지 않는 줄, 관리 줄 한 쌍, 잘못된 줄, 와일드카드 줄이 섞여 있다.
 // 비밀번호는 모두 테스트용 더미 값이다.
 const sample = `# 손으로 관리하는 pgpass
 localhost:5432:*:postgres:local\:pw
@@ -20,7 +20,7 @@ broken-line-without-enough-fields
 *:*:*:*:fallback
 `
 
-// variant is one way of encoding the same LF text: line endings and final newline.
+// variant는 같은 LF 텍스트를 줄바꿈 형식과 파일 끝 개행 유무로 바꿔 표현하는 방법 하나다.
 type variant struct {
 	name  string
 	apply func(string) string

@@ -1,5 +1,5 @@
-// Package pgpass reads and edits .pgpass files. Lines without a
-// "# psql-manager:<name>" marker are never modified.
+// Package pgpass는 .pgpass 파일을 읽고 편집한다. "# psql-manager:<name>" 표식이
+// 없는 줄은 절대 수정하지 않는다.
 package pgpass
 
 import (
@@ -13,21 +13,22 @@ import (
 	"strings"
 )
 
-// MarkerPrefix starts the comment that marks the next line as owned by a service.
+// MarkerPrefix는 바로 다음 줄을 서비스가 소유한다고 표시하는 주석의 접두어다.
 const MarkerPrefix = "# psql-manager:"
 
-// Errors returned by File methods.
+// File 메서드가 돌려주는 오류.
 var (
 	ErrInvalidName   = errors.New("pgpass: invalid service name")
 	ErrInvalidValue  = errors.New("pgpass: value must not contain line breaks")
 	ErrEmptyPassword = errors.New("pgpass: password is empty")
 	ErrNotManaged    = errors.New("pgpass: no managed entry for service")
 	ErrDuplicate     = errors.New("pgpass: service already has a managed entry")
+	ErrMissingField  = errors.New("pgpass: port, database and user are required")
 )
 
 var nameRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
 
-// DefaultPath returns $PGPASSFILE, or ~/.pgpass when it is unset.
+// DefaultPath는 $PGPASSFILE을, 설정되어 있지 않으면 ~/.pgpass를 돌려준다.
 func DefaultPath() (string, error) {
 	if p := os.Getenv("PGPASSFILE"); p != "" {
 		return p, nil
@@ -39,16 +40,16 @@ func DefaultPath() (string, error) {
 	return filepath.Join(home, ".pgpass"), nil
 }
 
-// NormalizeHost maps an empty host (socket connection) to "localhost", the
-// name libpq looks up in .pgpass.
+// NormalizeHost는 유닉스 도메인 소켓 host(빈 값이나 '/'로 시작하는 디렉터리 경로)를
+// libpq가 .pgpass에서 찾는 이름인 "localhost"로 바꾼다.
 func NormalizeHost(host string) string {
-	if host == "" {
+	if host == "" || strings.HasPrefix(host, "/") {
 		return "localhost"
 	}
 	return host
 }
 
-// Entry is one hostname:port:database:username:password line, unescaped.
+// Entry는 이스케이프를 해석한 hostname:port:database:username:password 한 줄이다.
 type Entry struct {
 	Host     string
 	Port     string
@@ -57,12 +58,12 @@ type Entry struct {
 	Password string
 }
 
-// String formats the entry with the password masked.
+// String은 비밀번호를 가린 형태로 항목을 출력한다.
 func (e Entry) String() string {
 	return fmt.Sprintf("%s:%s:%s:%s:%s", e.Host, e.Port, e.Database, e.User, mask(e.Password))
 }
 
-// GoString formats the entry for %#v with the password masked.
+// GoString은 %#v 출력에서도 비밀번호를 가린다.
 func (e Entry) GoString() string {
 	return fmt.Sprintf("pgpass.Entry{Host:%q, Port:%q, Database:%q, User:%q, Password:%q}",
 		e.Host, e.Port, e.Database, e.User, mask(e.Password))
@@ -75,28 +76,28 @@ func mask(pw string) string {
 	return "********"
 }
 
-// Record is a parsed entry line together with its ownership.
+// Record는 파싱한 항목 줄과 그 소유 정보다.
 type Record struct {
 	Entry
-	Owner    string // service name from the marker above, "" when unmanaged
-	Line     int    // 1-based
-	Wildcard bool   // any of the four key fields is "*"
+	Owner    string // 바로 위 표식의 서비스명, 관리 대상이 아니면 ""
+	Line     int    // 1부터 시작
+	Wildcard bool   // 네 키 필드 중 하나라도 "*"인지
 }
 
-// ParseError describes one line Parse could not understand. It never
-// contains the line's content, which may hold a password.
+// ParseError는 Parse가 이해하지 못한 줄 하나를 나타낸다. 비밀번호가 들어 있을 수
+// 있으므로 줄 내용은 절대 담지 않는다.
 type ParseError struct {
-	Line int // 1-based
+	Line int // 1부터 시작
 	Msg  string
 }
 
-// Error implements error.
+// Error는 error 인터페이스를 구현한다.
 func (e *ParseError) Error() string { return fmt.Sprintf("line %d: %s", e.Line, e.Msg) }
 
-// ParseErrors collects every line Parse could not understand.
+// ParseErrors는 Parse가 이해하지 못한 줄을 모두 모은다.
 type ParseErrors []*ParseError
 
-// Error implements error.
+// Error는 error 인터페이스를 구현한다.
 func (es ParseErrors) Error() string {
 	msgs := make([]string, len(es))
 	for i, e := range es {
@@ -118,7 +119,7 @@ type line struct {
 	text  string
 	eol   string
 	kind  kind
-	owner string // marker comment: service name
+	owner string // 표식 주석일 때 서비스명
 	entry Entry
 	wild  [4]bool
 }
@@ -149,8 +150,8 @@ func classify(text, eol string) *line {
 	return l
 }
 
-// splitFields splits at unescaped colons and unescapes "\x" to "x". A field
-// is a wildcard only when its raw text is exactly "*".
+// splitFields는 이스케이프되지 않은 콜론에서 나누고 "\x"를 "x"로 해석한다.
+// 원문이 정확히 "*"인 필드만 와일드카드로 본다.
 func splitFields(text string) (fields []string, wild []bool) {
 	var b strings.Builder
 	start := 0
@@ -171,7 +172,7 @@ func splitFields(text string) (fields []string, wild []bool) {
 	return append(fields, b.String()), append(wild, text[start:] == "*")
 }
 
-// Escape escapes ':' and '\' for use in a .pgpass field.
+// Escape는 .pgpass 필드에 쓸 수 있도록 ':'와 '\'를 이스케이프한다.
 func Escape(s string) string {
 	if !strings.ContainsAny(s, `:\`) {
 		return s
@@ -186,7 +187,7 @@ func Escape(s string) string {
 	return b.String()
 }
 
-// Unescape reverses Escape the way libpq reads a field: "\x" becomes "x".
+// Unescape는 libpq가 필드를 읽는 방식대로 Escape를 되돌린다. "\x"는 "x"가 된다.
 func Unescape(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); i++ {
@@ -198,8 +199,8 @@ func Unescape(s string) string {
 	return b.String()
 }
 
-// keyField escapes a host, port, database or user value. A literal "*" is
-// escaped so it is not read as a wildcard.
+// keyField는 host, port, database, user 값을 이스케이프한다. 글자 그대로의 "*"는
+// 와일드카드로 읽히지 않도록 이스케이프한다.
 func keyField(s string) string {
 	if s == "*" {
 		return `\*`
@@ -207,8 +208,8 @@ func keyField(s string) string {
 	return Escape(s)
 }
 
-// format renders e as one .pgpass line. A leading '#' is escaped so the line
-// is not read as a comment.
+// format은 e를 .pgpass 한 줄로 만든다. 맨 앞의 '#'는 주석으로 읽히지 않도록
+// 이스케이프한다.
 func format(e Entry) string {
 	host := keyField(e.Host)
 	if strings.HasPrefix(host, "#") {
@@ -217,15 +218,15 @@ func format(e Entry) string {
 	return strings.Join([]string{host, keyField(e.Port), keyField(e.Database), keyField(e.User), Escape(e.Password)}, ":")
 }
 
-// File is a parsed .pgpass.
+// File은 파싱한 .pgpass 파일이다.
 type File struct {
 	lines      []*line
 	eol        string
 	noFinalEOL bool
 }
 
-// Parse splits data into lines. It always returns a usable File; malformed
-// lines are kept verbatim and reported together as ParseErrors.
+// Parse는 data를 줄 단위로 나눈다. 항상 사용 가능한 File을 돌려주며, 형식이
+// 잘못된 줄은 원문 그대로 보존하고 ParseErrors로 한꺼번에 알린다.
 func Parse(data []byte) (*File, error) {
 	texts, eols, eol, noFinal := splitLines(data)
 	f := &File{eol: eol, noFinalEOL: noFinal}
@@ -243,8 +244,8 @@ func Parse(data []byte) (*File, error) {
 	return f, nil
 }
 
-// splitLines splits data keeping each line's own terminator. A final line
-// without terminator gets the default one and noFinal is reported instead.
+// splitLines는 각 줄의 줄바꿈 문자를 그대로 유지하며 data를 나눈다. 줄바꿈 없이
+// 끝나는 마지막 줄에는 기본 줄바꿈을 넣고, 대신 noFinal로 그 사실을 알린다.
 func splitLines(data []byte) (texts, eols []string, defEOL string, noFinal bool) {
 	s := string(data)
 	for len(s) > 0 {
@@ -272,7 +273,7 @@ func splitLines(data []byte) (texts, eols []string, defEOL string, noFinal bool)
 	return texts, eols, defEOL, noFinal
 }
 
-// Bytes serializes the file. Untouched lines come back exactly as read.
+// Bytes는 파일을 직렬화한다. 건드리지 않은 줄은 읽은 그대로 돌려준다.
 func (f *File) Bytes() []byte {
 	var b bytes.Buffer
 	for i, l := range f.lines {
@@ -286,7 +287,7 @@ func (f *File) Bytes() []byte {
 
 func (f *File) newLine(text string) *line { return classify(text, f.eol) }
 
-// owner returns the service name marking lines[i], if any.
+// owner는 lines[i]를 소유한다고 표시한 서비스명을 돌려준다. 없으면 ""이다.
 func (f *File) owner(i int) string {
 	if i > 0 {
 		return f.lines[i-1].owner
@@ -294,7 +295,7 @@ func (f *File) owner(i int) string {
 	return ""
 }
 
-// Records returns every entry line in file order.
+// Records는 모든 항목 줄을 파일 순서대로 돌려준다.
 func (f *File) Records() []Record {
 	var out []Record
 	for i, l := range f.lines {
@@ -311,30 +312,34 @@ func (f *File) Records() []Record {
 	return out
 }
 
-// Lookup returns the first entry matching the connection parameters, as libpq
-// does. An empty host is looked up as "localhost".
+// Lookup은 libpq처럼 접속 파라미터와 일치하는 첫 항목을 돌려준다. 소켓 host는
+// "localhost"로 찾는다.
 func (f *File) Lookup(host, port, database, user string) (Entry, bool) {
 	want := [4]string{NormalizeHost(host), port, database, user}
 	for _, l := range f.lines {
-		if l.kind != kindEntry {
-			continue
-		}
-		got := [4]string{l.entry.Host, l.entry.Port, l.entry.Database, l.entry.User}
-		match := true
-		for k := range got {
-			if !l.wild[k] && got[k] != want[k] {
-				match = false
-				break
-			}
-		}
-		if match {
+		if l.matches(want) {
 			return l.entry, true
 		}
 	}
 	return Entry{}, false
 }
 
-// marker returns the index of the first marker for name, or -1.
+// matches는 l이 want(host, port, database, user)에 대해 libpq가 사용할
+// 항목 줄인지 알려 준다.
+func (l *line) matches(want [4]string) bool {
+	if l.kind != kindEntry {
+		return false
+	}
+	got := [4]string{l.entry.Host, l.entry.Port, l.entry.Database, l.entry.User}
+	for k := range got {
+		if !l.wild[k] && got[k] != want[k] {
+			return false
+		}
+	}
+	return true
+}
+
+// marker는 name에 대한 첫 표식의 인덱스를 돌려준다. 없으면 -1이다.
 func (f *File) marker(name string) int {
 	for i, l := range f.lines {
 		if l.owner == name {
@@ -344,12 +349,12 @@ func (f *File) marker(name string) int {
 	return -1
 }
 
-// managedEntry reports whether the marker at m is followed by an entry line.
+// managedEntry는 m 위치의 표식 바로 다음이 항목 줄인지 알려 준다.
 func (f *File) managedEntry(m int) bool {
 	return m+1 < len(f.lines) && f.lines[m+1].kind == kindEntry
 }
 
-// Managed returns the entry owned by service name.
+// Managed는 서비스 name이 소유한 항목을 돌려준다.
 func (f *File) Managed(name string) (Entry, bool) {
 	m := f.marker(name)
 	if m < 0 || !f.managedEntry(m) {
@@ -358,10 +363,11 @@ func (f *File) Managed(name string) (Entry, bool) {
 	return f.lines[m+1].entry, true
 }
 
-// SetManaged writes the entry owned by service name. An existing entry line
-// is replaced in place; a new marker and entry pair is inserted above the
-// first wildcard line (and the comments attached to it), or appended.
-// An empty host is written as "localhost".
+// SetManaged는 서비스 name이 소유한 항목을 쓴다. 기존 항목 줄은 제자리에서
+// 교체한다. 새 표식과 항목 한 쌍은 그 줄을 가리게 될 첫 와일드카드 줄(바로 위에
+// 붙은 주석 포함)보다 위에 넣고, 일치하는 와일드카드 줄이 없으면 파일 끝에 붙인다.
+// 소켓 host는 "localhost"로 쓴다. libpq는 빈 필드를 절대 매칭하지 않으므로
+// port, database, user는 필수다.
 func (f *File) SetManaged(name string, e Entry) error {
 	if !nameRe.MatchString(name) {
 		return ErrInvalidName
@@ -373,6 +379,9 @@ func (f *File) SetManaged(name string, e Entry) error {
 	}
 	if e.Password == "" {
 		return ErrEmptyPassword
+	}
+	if e.Port == "" || e.Database == "" || e.User == "" {
+		return ErrMissingField
 	}
 	e.Host = NormalizeHost(e.Host)
 	text := format(e)
@@ -391,8 +400,9 @@ func (f *File) SetManaged(name string, e Entry) error {
 	}
 
 	at := len(f.lines)
+	key := [4]string{e.Host, e.Port, e.Database, e.User}
 	for i, l := range f.lines {
-		if l.kind == kindEntry && slices.Contains(l.wild[:], true) {
+		if slices.Contains(l.wild[:], true) && l.matches(key) {
 			at = i
 			for at > 0 && f.lines[at-1].kind == kindComment {
 				at--
@@ -404,8 +414,8 @@ func (f *File) SetManaged(name string, e Entry) error {
 	return nil
 }
 
-// RemoveManaged deletes the marker for name and the entry it owns, and
-// reports whether a marker existed.
+// RemoveManaged는 name의 표식과 그 표식이 소유한 항목을 지우고, 표식이 있었는지
+// 알려 준다.
 func (f *File) RemoveManaged(name string) bool {
 	m := f.marker(name)
 	if m < 0 {
@@ -419,7 +429,7 @@ func (f *File) RemoveManaged(name string) bool {
 	return true
 }
 
-// RenameManaged rewrites only the marker comment from oldName to newName.
+// RenameManaged는 표식 주석만 oldName에서 newName으로 바꾼다.
 func (f *File) RenameManaged(oldName, newName string) error {
 	if !nameRe.MatchString(newName) {
 		return ErrInvalidName

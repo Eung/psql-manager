@@ -1,5 +1,5 @@
-// Package svcfile reads and edits pg_service.conf files line by line so that
-// every line the caller does not touch is written back byte for byte.
+// Package svcfile은 pg_service.conf를 줄 단위로 읽고 편집해, 호출하는 쪽이
+// 건드리지 않은 줄은 바이트 단위로 그대로 되쓴다.
 package svcfile
 
 import (
@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-// Errors returned by File and Section methods.
+// File과 Section 메서드가 돌려주는 오류.
 var (
 	ErrInvalidName      = errors.New("svcfile: invalid service name")
 	ErrDuplicateSection = errors.New("svcfile: service already exists")
@@ -28,10 +28,10 @@ var (
 	keyRe  = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 )
 
-// ValidName reports whether name is an acceptable service name ([A-Za-z0-9._-]+).
+// ValidName은 name이 허용되는 서비스명([A-Za-z0-9._-]+)인지 알려 준다.
 func ValidName(name string) bool { return nameRe.MatchString(name) }
 
-// DefaultPath returns $PGSERVICEFILE, or ~/.pg_service.conf when it is unset.
+// DefaultPath는 $PGSERVICEFILE을, 설정되어 있지 않으면 ~/.pg_service.conf를 돌려준다.
 func DefaultPath() (string, error) {
 	if p := os.Getenv("PGSERVICEFILE"); p != "" {
 		return p, nil
@@ -43,33 +43,31 @@ func DefaultPath() (string, error) {
 	return filepath.Join(home, ".pg_service.conf"), nil
 }
 
-// Param is one key=value line of a section.
+// Param은 섹션의 key=value 한 줄이다.
 type Param struct {
 	Key   string
 	Value string
 }
 
-// Meta is the management metadata kept in "# desc:" and "# tags:" comments
-// directly above a section header.
+// Meta는 섹션 헤더 바로 위 "# desc:", "# tags:" 주석에 담긴 관리용 메타데이터다.
 type Meta struct {
 	Desc string
 	Tags []string
 }
 
-// ParseError describes one line Parse could not understand. It never
-// contains the line's content.
+// ParseError는 Parse가 이해하지 못한 줄 하나를 나타낸다. 줄 내용은 절대 담지 않는다.
 type ParseError struct {
-	Line int // 1-based
+	Line int // 1부터 시작
 	Msg  string
 }
 
-// Error implements error.
+// Error는 error 인터페이스를 구현한다.
 func (e *ParseError) Error() string { return fmt.Sprintf("line %d: %s", e.Line, e.Msg) }
 
-// ParseErrors collects every line Parse could not understand.
+// ParseErrors는 Parse가 이해하지 못한 줄을 모두 모은다.
 type ParseErrors []*ParseError
 
-// Error implements error.
+// Error는 error 인터페이스를 구현한다.
 func (es ParseErrors) Error() string {
 	msgs := make([]string, len(es))
 	for i, e := range es {
@@ -88,17 +86,17 @@ const (
 	kindInvalid
 )
 
-// line is one physical line. text excludes the terminator, eol holds it.
+// line은 물리적인 한 줄이다. text에는 줄바꿈 문자가 없고, 줄바꿈은 eol에 둔다.
 type line struct {
 	text  string
 	eol   string
 	kind  kind
-	name  string // kindHeader
-	key   string // kindParam
-	value string // kindParam
+	name  string // kindHeader일 때
+	key   string // kindParam일 때
+	value string // kindParam일 때
 }
 
-// classify parses text without section context. reason is set for kindInvalid.
+// classify는 섹션 문맥 없이 text를 분류한다. kindInvalid이면 reason에 이유를 담는다.
 func classify(text, eol string) (l *line, reason string) {
 	l = &line{text: text, eol: eol}
 	t := strings.TrimSpace(text)
@@ -129,16 +127,15 @@ func classify(text, eol string) (l *line, reason string) {
 	return l, ""
 }
 
-// File is a parsed pg_service.conf.
+// File은 파싱한 pg_service.conf다.
 type File struct {
 	lines      []*line
-	eol        string // terminator for newly written lines
-	noFinalEOL bool   // the last line had no terminator when read
+	eol        string // 새로 쓰는 줄에 붙일 줄바꿈
+	noFinalEOL bool   // 읽을 때 마지막 줄에 줄바꿈이 없었는지
 }
 
-// Parse splits data into lines and classifies them. It always returns a
-// usable File; lines it cannot understand are kept verbatim and reported
-// together as ParseErrors.
+// Parse는 data를 줄 단위로 나눠 분류한다. 항상 사용 가능한 File을 돌려주며,
+// 이해하지 못한 줄은 원문 그대로 보존하고 ParseErrors로 한꺼번에 알린다.
 func Parse(data []byte) (*File, error) {
 	texts, eols, eol, noFinal := splitLines(data)
 	f := &File{eol: eol, noFinalEOL: noFinal}
@@ -165,8 +162,8 @@ func Parse(data []byte) (*File, error) {
 	return f, nil
 }
 
-// splitLines splits data keeping each line's own terminator. A final line
-// without terminator gets the default one and noFinal is reported instead.
+// splitLines는 각 줄의 줄바꿈 문자를 그대로 유지하며 data를 나눈다. 줄바꿈 없이
+// 끝나는 마지막 줄에는 기본 줄바꿈을 넣고, 대신 noFinal로 그 사실을 알린다.
 func splitLines(data []byte) (texts, eols []string, defEOL string, noFinal bool) {
 	s := string(data)
 	for len(s) > 0 {
@@ -194,7 +191,7 @@ func splitLines(data []byte) (texts, eols []string, defEOL string, noFinal bool)
 	return texts, eols, defEOL, noFinal
 }
 
-// Bytes serializes the file. Untouched lines come back exactly as read.
+// Bytes는 파일을 직렬화한다. 건드리지 않은 줄은 읽은 그대로 돌려준다.
 func (f *File) Bytes() []byte {
 	var b bytes.Buffer
 	for i, l := range f.lines {
@@ -206,8 +203,8 @@ func (f *File) Bytes() []byte {
 	return b.Bytes()
 }
 
-// span locates one section: lines[lead:header] are its leading comments and
-// lines[header+1:end] its body.
+// span은 섹션 하나의 위치다. lines[lead:header]는 헤더 앞 주석,
+// lines[header+1:end]는 본문이다.
 type span struct{ lead, header, end int }
 
 func (f *File) spans() []span {
@@ -244,7 +241,7 @@ func (f *File) remove(from, to int) {
 	f.lines = slices.Delete(f.lines, from, to)
 }
 
-// Sections returns every section in file order, duplicates included.
+// Sections는 중복을 포함한 모든 섹션을 파일 순서대로 돌려준다.
 func (f *File) Sections() []*Section {
 	sp := f.spans()
 	out := make([]*Section, len(sp))
@@ -254,7 +251,7 @@ func (f *File) Sections() []*Section {
 	return out
 }
 
-// Section returns the first section called name, as libpq would use it, or nil.
+// Section은 libpq처럼 이름이 name인 첫 섹션을 돌려준다. 없으면 nil이다.
 func (f *File) Section(name string) *Section {
 	for _, s := range f.spans() {
 		if f.lines[s.header].name == name {
@@ -264,8 +261,8 @@ func (f *File) Section(name string) *Section {
 	return nil
 }
 
-// AddSection appends a new section at the end of the file, separated by one
-// blank line, with "# desc:" and "# tags:" comments above its header.
+// AddSection은 파일 끝에 빈 줄 하나를 두고 새 섹션을 추가한다. 헤더 위에는
+// "# desc:", "# tags:" 주석을 쓴다.
 func (f *File) AddSection(name string, meta Meta, params []Param) (*Section, error) {
 	if !ValidName(name) {
 		return nil, ErrInvalidName
@@ -305,8 +302,8 @@ func (f *File) AddSection(name string, meta Meta, params []Param) (*Section, err
 	return &Section{f: f, hdr: hdr}, nil
 }
 
-// Section is a handle to one section of a File. It stays valid across edits
-// to the file until the section itself is removed.
+// Section은 File의 섹션 하나를 가리키는 핸들이다. 파일을 편집해도 그 섹션이
+// 지워지기 전까지는 계속 유효하다.
 type Section struct {
 	f   *File
 	hdr *line
@@ -321,11 +318,10 @@ func (s *Section) span() (span, error) {
 	return span{}, ErrNoSection
 }
 
-// Name returns the section name.
+// Name은 섹션 이름을 돌려준다.
 func (s *Section) Name() string { return s.hdr.name }
 
-// Line returns the 1-based line number of the section header, or 0 if the
-// section has been removed.
+// Line은 섹션 헤더의 줄 번호(1부터 시작)를 돌려준다. 섹션이 지워졌으면 0이다.
 func (s *Section) Line() int {
 	sp, err := s.span()
 	if err != nil {
@@ -334,7 +330,7 @@ func (s *Section) Line() int {
 	return sp.header + 1
 }
 
-// Params returns the key=value lines of the section in file order.
+// Params는 섹션의 key=value 줄을 파일 순서대로 돌려준다.
 func (s *Section) Params() []Param {
 	sp, err := s.span()
 	if err != nil {
@@ -349,7 +345,7 @@ func (s *Section) Params() []Param {
 	return out
 }
 
-// Get returns the value of the first key line, as libpq would use it.
+// Get은 libpq처럼 key에 해당하는 첫 줄의 값을 돌려준다.
 func (s *Section) Get(key string) (string, bool) {
 	for _, p := range s.Params() {
 		if p.Key == key {
@@ -359,8 +355,8 @@ func (s *Section) Get(key string) (string, bool) {
 	return "", false
 }
 
-// Set replaces the first line for key, or adds key after the last key line
-// of the section. Setting the current value leaves the line untouched.
+// Set은 key의 첫 줄을 교체하거나, 없으면 섹션의 마지막 키 줄 뒤에 추가한다.
+// 현재 값과 같으면 줄을 건드리지 않는다.
 func (s *Section) Set(key, value string) error {
 	if err := validateParam(key, value); err != nil {
 		return err
@@ -389,7 +385,7 @@ func (s *Section) Set(key, value string) error {
 	return nil
 }
 
-// Unset removes every line for key and reports whether any existed.
+// Unset은 key에 해당하는 줄을 모두 지우고, 하나라도 있었는지 알려 준다.
 func (s *Section) Unset(key string) bool {
 	sp, err := s.span()
 	if err != nil {
@@ -405,7 +401,7 @@ func (s *Section) Unset(key string) bool {
 	return removed
 }
 
-// Rename changes only the header line to [name].
+// Rename은 헤더 줄만 [name]으로 바꾼다.
 func (s *Section) Rename(name string) error {
 	if !ValidName(name) {
 		return ErrInvalidName
@@ -425,9 +421,8 @@ func (s *Section) Rename(name string) error {
 	return nil
 }
 
-// Remove deletes the section header, its body and the comments directly
-// above it. Comments separated from the header by a blank line are kept, as
-// are blank-separated comments trailing the body.
+// Remove는 섹션 헤더, 본문, 헤더 바로 위 주석을 지운다. 헤더와 빈 줄로 분리된
+// 주석과, 본문 뒤에 빈 줄로 분리되어 이어지는 주석은 남긴다.
 func (s *Section) Remove() error {
 	sp, err := s.span()
 	if err != nil {
@@ -462,7 +457,7 @@ func (s *Section) Remove() error {
 	return nil
 }
 
-// Meta returns the desc and tags comments above the header.
+// Meta는 헤더 위 desc, tags 주석을 읽어 돌려준다.
 func (s *Section) Meta() Meta {
 	var m Meta
 	sp, err := s.span()
@@ -479,7 +474,7 @@ func (s *Section) Meta() Meta {
 	return m
 }
 
-// SetDesc writes the "# desc:" comment. An empty desc removes it.
+// SetDesc는 "# desc:" 주석을 쓴다. 빈 값이면 주석을 지운다.
 func (s *Section) SetDesc(desc string) error {
 	if err := validateText(desc); err != nil {
 		return err
@@ -487,7 +482,7 @@ func (s *Section) SetDesc(desc string) error {
 	return s.setMeta("desc", desc, func(old string) bool { return old == desc })
 }
 
-// SetTags writes the "# tags:" comment. No tags removes it.
+// SetTags는 "# tags:" 주석을 쓴다. 태그가 없으면 주석을 지운다.
 func (s *Section) SetTags(tags []string) error {
 	v, err := formatTags(tags)
 	if err != nil {
@@ -496,8 +491,8 @@ func (s *Section) SetTags(tags []string) error {
 	return s.setMeta("tags", v, func(old string) bool { return slices.Equal(splitTags(old), splitTags(v)) })
 }
 
-// setMeta replaces, removes or inserts one meta comment. A new desc goes to
-// the top of the leading comments, a new tags line right below desc.
+// setMeta는 메타 주석 하나를 교체, 삭제, 삽입한다. 새 desc는 헤더 앞 주석의 맨
+// 위에, 새 tags는 desc 바로 아래에 넣는다.
 func (s *Section) setMeta(key, value string, same func(old string) bool) error {
 	sp, err := s.span()
 	if err != nil {
@@ -535,7 +530,7 @@ func (s *Section) findMeta(sp span, key string) int {
 	return -1
 }
 
-// metaLine recognizes "# desc: ..." and "# tags: ..." comments.
+// metaLine은 "# desc: ...", "# tags: ..." 주석을 알아본다.
 func metaLine(text string) (key, value string) {
 	t := strings.TrimSpace(text)
 	if !strings.HasPrefix(t, "#") {

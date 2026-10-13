@@ -10,13 +10,13 @@ import (
 	"syscall"
 )
 
-// ErrLocked means another psql-manager process holds the lock.
+// ErrLocked는 다른 psql-manager 프로세스가 잠금을 잡고 있다는 뜻이다.
 var ErrLocked = errors.New("fsutil: another psql-manager process is running")
 
-// Lock is an exclusive flock held on a lock file.
+// Lock은 잠금 파일에 건 배타적 flock이다.
 type Lock struct{ f *os.File }
 
-// DefaultLockPath returns ~/.psql-manager.lock.
+// DefaultLockPath는 ~/.psql-manager.lock 경로를 돌려준다.
 func DefaultLockPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -25,8 +25,8 @@ func DefaultLockPath() (string, error) {
 	return filepath.Join(home, ".psql-manager.lock"), nil
 }
 
-// Acquire takes an exclusive lock on path without waiting. It returns
-// ErrLocked when the lock is held elsewhere. The lock file is never removed.
+// Acquire는 path에 대기 없이 배타적 잠금을 건다. 다른 곳에서 잠금을 잡고
+// 있으면 ErrLocked를 돌려준다. 잠금 파일은 지우지 않는다.
 func Acquire(path string) (*Lock, error) {
 	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, FileMode)
 	if err != nil {
@@ -42,7 +42,7 @@ func Acquire(path string) (*Lock, error) {
 	return &Lock{f: f}, nil
 }
 
-// Release drops the lock. It is safe to call more than once.
+// Release는 잠금을 푼다. 여러 번 호출해도 안전하다.
 func (l *Lock) Release() error {
 	if l.f == nil {
 		return nil
